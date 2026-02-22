@@ -12,4 +12,5 @@ sealed class Screen(val route: String) {
     object Dhikr       : Screen("dhikr")
     object Qibla       : Screen("qibla")
     object Settings    : Screen("settings")
+    object GoogleAuth  : Screen("google_auth")
 }

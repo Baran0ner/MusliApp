@@ -139,4 +139,9 @@ class QuranAudioPlayer @Inject constructor(
             )
         }
     }
+
+    /** Sayfadan çıkıldığında sesi duraklatır; geri gelince kullanıcı play ile devam edebilir. */
+    fun pauseWhenLeavingScreen() {
+        exoPlayer?.pause()
+    }
 }

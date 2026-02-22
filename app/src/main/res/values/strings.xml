@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">MusliApp</string>
+    <string name="widget_description">Sıradaki namaz vaktini ve kalan süreyi gösterir</string>
 </resources>

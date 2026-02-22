@@ -10,6 +10,7 @@ import com.example.islam.domain.model.PrayerType
 import com.example.islam.domain.model.UserPreferences
 import com.example.islam.domain.model.WeekDay
 import com.example.islam.domain.model.timeFor
+import com.example.islam.data.repository.FirebaseRepository
 import com.example.islam.domain.repository.PrayerHistoryRepository
 import com.example.islam.domain.usecase.prayer.GetPrayerTimesUseCase
 import com.example.islam.domain.usecase.prayer.GetNextPrayerUseCase
@@ -21,6 +22,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -45,7 +47,8 @@ class PrayerViewModel @Inject constructor(
     private val getPrayerTimesUseCase  : GetPrayerTimesUseCase,
     private val getNextPrayerUseCase   : GetNextPrayerUseCase,
     private val prefsDataStore         : UserPreferencesDataStore,
-    private val prayerHistoryRepository: PrayerHistoryRepository
+    private val prayerHistoryRepository: PrayerHistoryRepository,
+    private val firebaseRepository     : FirebaseRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PrayerUiState())
@@ -113,19 +116,25 @@ class PrayerViewModel @Inject constructor(
     fun togglePrayerCompleted(prayer: Prayer) {
         viewModelScope.launch {
             prefsDataStore.togglePrayerCompleted(prayer.name, trackablePrayers)
-            
+
             // Sync with Room DB
             val todayDate = java.time.LocalDate.now().toString()
             val type = when (prayer) {
-                Prayer.FAJR -> PrayerType.FAJR
-                Prayer.DHUHR -> PrayerType.DHUHR
-                Prayer.ASR -> PrayerType.ASR
+                Prayer.FAJR    -> PrayerType.FAJR
+                Prayer.DHUHR   -> PrayerType.DHUHR
+                Prayer.ASR     -> PrayerType.ASR
                 Prayer.MAGHRIB -> PrayerType.MAGHRIB
-                Prayer.ISHA -> PrayerType.ISHA
-                else -> null
+                Prayer.ISHA    -> PrayerType.ISHA
+                else           -> null
             }
             if (type != null) {
                 prayerHistoryRepository.togglePrayerStatus(todayDate, type)
+            }
+
+            // Kullanıcı giriş yapmışsa güncel streak'i Firestore'a yaz
+            if (firebaseRepository.isSignedIn) {
+                val streak = prefsDataStore.prayerStreak.first()
+                firebaseRepository.syncStreak(streak)
             }
         }
     }

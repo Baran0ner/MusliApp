@@ -17,6 +17,7 @@ import com.example.islam.presentation.prayer.PrayerScreen
 import com.example.islam.presentation.qibla.QiblaScreen
 import com.example.islam.presentation.quran.QuranScreen
 import com.example.islam.presentation.quran.SurahReaderScreen
+import com.example.islam.presentation.auth.GoogleAuthScreen
 import com.example.islam.presentation.settings.SettingsScreen
 
 @Composable
@@ -79,7 +80,10 @@ fun NavGraph(
             QiblaScreen(navController = navController)
         }
         composable(Screen.Settings.route) {
-            SettingsScreen()
+            SettingsScreen(navController = navController)
+        }
+        composable(Screen.GoogleAuth.route) {
+            GoogleAuthScreen(navController = navController)
         }
     }
 }

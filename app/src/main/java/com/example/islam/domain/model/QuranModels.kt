@@ -9,7 +9,9 @@ data class SurahListModel(
     val numberOfAyahs: Int,
     val revelationType: String,
     val arabicName: String = "",
-    val isBookmarked: Boolean = false
+    val isBookmarked: Boolean = false,
+    val turkishNameTranslation: String? = null,  // Türkçe anlam (gösterimde kullanılır)
+    val turkishDisplayName: String? = null      // Türkçe sure adı: "Fatiha Suresi", "Fil Suresi" vb.
 )
 
 /** List item for Cüz tab */

@@ -178,6 +178,7 @@ class SurahReaderViewModel @Inject constructor(
     }
 
     override fun onCleared() {
-        // Singleton player'ı release etmiyoruz; uygulama genelinde çalışmaya devam etsin
+        // Sayfadan çıkıldığında sesi durdur; geri gelince kullanıcı play ile kaldığı yerden devam edebilir
+        audioPlayer.pauseWhenLeavingScreen()
     }
 }

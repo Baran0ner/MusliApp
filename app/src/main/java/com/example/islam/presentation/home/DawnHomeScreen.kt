@@ -96,40 +96,40 @@ fun DawnHomeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 24.dp)
-                    .padding(top = 24.dp, bottom = 16.dp),
+                    .padding(top = 16.dp, bottom = 2.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // ── Üst: Tarih + Hicri + Namaz adı + Saat + Geri sayım ───────
+                // ── Üst: Tarih + Hicri + Namaz adı + Saat + Geri sayım (kompakt, ayete yer bırakır) ───────
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(4.dp))
                     // Miladi tarih — uppercase, küçük, gri
                     Text(
                         text = gregorianDate.uppercase(),
-                        fontSize = 14.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         letterSpacing = 0.5.sp,
                         color = RefTextGray300
                     )
                     // Hicri — gün numarası altın, geri kalanı gri (Amiri)
                     HijriDateText(hijriDate = hijriDate)
-                    Spacer(Modifier.height(12.dp))
-                    // Namaz adı — Playfair benzeri büyük serif
+                    Spacer(Modifier.height(6.dp))
+                    // Namaz adı — serif
                     Text(
                         text = prayerName,
-                        fontSize = 36.sp,
+                        fontSize = 28.sp,
                         fontWeight = FontWeight.Normal,
                         fontFamily = FontFamily.Serif,
                         letterSpacing = 0.5.sp,
                         color = RefTextGray200
                     )
-                    // Saat — çok büyük
+                    // Saat — büyük ama ekranı doldurmayacak kadar
                     Text(
                         text = time,
-                        fontSize = 88.sp,
-                        lineHeight = 88.sp,
+                        fontSize = 64.sp,
+                        lineHeight = 64.sp,
                         fontWeight = FontWeight.Medium,
                         fontFamily = FontFamily.Serif,
                         letterSpacing = (-0.5).sp,
@@ -138,7 +138,7 @@ fun DawnHomeScreen(
                     // Geri sayım pill
                     Row(
                         modifier = Modifier
-                            .padding(top = 8.dp)
+                            .padding(top = 4.dp)
                             .clip(RoundedCornerShape(50.dp))
                             .background(RefSurfaceCard.copy(alpha = 0.4f))
                             .border(1.dp, RefBorderPrimary30, RoundedCornerShape(50.dp))
@@ -161,13 +161,15 @@ fun DawnHomeScreen(
                     }
                 }
 
-                // ── Ayet kartı (kalan alanı doldurur, tek sayfada sığar) ──────
-                Spacer(Modifier.height(12.dp))
+                // Üstte esnek boşluk: ayet + Kıble + vakitler blokunu alta, menüye yaklaştırır
+                Spacer(Modifier.weight(1f))
+
+                // ── Ayet kartı: yükseklik ayet uzunluğuna göre değişir ──────
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
-                        .padding(vertical = 4.dp)
+                        .wrapContentHeight()
+                        .padding(vertical = 2.dp)
                 ) {
                     // Arka plan glow
                     Box(
@@ -180,11 +182,12 @@ fun DawnHomeScreen(
                     )
                     Column(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .wrapContentHeight()
+                            .fillMaxWidth()
                             .clip(RoundedCornerShape(32.dp))
                             .background(RefSurfaceCard60)
                             .border(1.dp, RefBorderPrimary30, RoundedCornerShape(32.dp))
-                            .padding(24.dp)
+                            .padding(horizontal = 20.dp, vertical = 14.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.FormatQuote,
@@ -192,23 +195,23 @@ fun DawnHomeScreen(
                             tint = RefPrimary70,
                             modifier = Modifier
                                 .align(Alignment.CenterHorizontally)
-                                .size(22.dp)
+                                .size(18.dp)
                         )
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(6.dp))
                         Text(
                             text = verseText,
-                            fontSize = 18.sp,
+                            fontSize = 14.sp,
                             fontFamily = FontFamily.Serif,
                             fontStyle = FontStyle.Italic,
-                            lineHeight = 28.sp,
+                            lineHeight = 20.sp,
                             color = RefTextGray100.copy(alpha = 0.95f),
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             text = verseRef.uppercase(),
-                            fontSize = 10.sp,
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.2.sp,
                             color = RefPrimary,
@@ -217,22 +220,24 @@ fun DawnHomeScreen(
                     }
                 }
 
-                // ── Kıble & Tespih butonları ───────────────────────────────────
-                Spacer(Modifier.height(12.dp))
+                // Ayet ile Kıble/Tespih arasında boşluk
+                Spacer(Modifier.height(16.dp))
+                // ── Kıble & Tespih (alttaki menüye yakın) ───────────────────────────────────
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     KibleButton(onClick = onQiblaClick, modifier = Modifier.weight(1f))
                     TespihButton(onClick = onTasbihClick, modifier = Modifier.weight(1f))
                 }
-                // ── Namaz vakitleri satırı (aynı Column içinde, üst üste binmez) ─
+                // Kıble/Tespih ile namaz vakitleri arasında boşluk
                 Spacer(Modifier.height(12.dp))
+                // ── Namaz vakitleri satırı ─
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState())
-                        .padding(bottom = 8.dp),
+                        .padding(bottom = 2.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     prayerItems.forEach { item ->

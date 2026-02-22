@@ -40,11 +40,11 @@ class PrayerHistoryDaoTest {
         // Arrange
         val entity = PrayerHistoryEntity(
             date = "2026-02-22",
-            fajrCompleted = true,
-            dhuhrCompleted = false,
-            asrCompleted = true,
-            maghribCompleted = false,
-            ishaCompleted = true
+            isFajrPrayed = true,
+            isDhuhrPrayed = false,
+            isAsrPrayed = true,
+            isMaghribPrayed = false,
+            isIshaPrayed = true
         )
 
         // Act
@@ -53,16 +53,16 @@ class PrayerHistoryDaoTest {
 
         // Assert
         assertNotNull(fetched)
-        assertEquals(true, fetched?.fajrCompleted)
-        assertEquals(false, fetched?.dhuhrCompleted)
+        assertEquals(true, fetched?.isFajrPrayed)
+        assertEquals(false, fetched?.isDhuhrPrayed)
     }
 
     @Test
     fun getLast7DaysHistory_returnsOrderedList() = runBlocking {
         // Arrange
-        val entity1 = PrayerHistoryEntity(date = "2026-02-20", fajrCompleted = true, dhuhrCompleted = true, asrCompleted = true, maghribCompleted = true, ishaCompleted = true)
-        val entity2 = PrayerHistoryEntity(date = "2026-02-22", fajrCompleted = false, dhuhrCompleted = false, asrCompleted = false, maghribCompleted = false, ishaCompleted = false)
-        val entity3 = PrayerHistoryEntity(date = "2026-02-21", fajrCompleted = true, dhuhrCompleted = false, asrCompleted = true, maghribCompleted = false, ishaCompleted = true)
+        val entity1 = PrayerHistoryEntity(date = "2026-02-20", isFajrPrayed = true, isDhuhrPrayed = true, isAsrPrayed = true, isMaghribPrayed = true, isIshaPrayed = true)
+        val entity2 = PrayerHistoryEntity(date = "2026-02-22", isFajrPrayed = false, isDhuhrPrayed = false, isAsrPrayed = false, isMaghribPrayed = false, isIshaPrayed = false)
+        val entity3 = PrayerHistoryEntity(date = "2026-02-21", isFajrPrayed = true, isDhuhrPrayed = false, isAsrPrayed = true, isMaghribPrayed = false, isIshaPrayed = true)
 
         dao.insertOrUpdate(entity1)
         dao.insertOrUpdate(entity2)

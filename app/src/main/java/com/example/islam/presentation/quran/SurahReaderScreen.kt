@@ -253,6 +253,7 @@ private fun VerseBlock(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onPlayClick)
             .border(1.dp, Gray100.copy(alpha = 0.5f))
             .padding(horizontal = 20.dp, vertical = 24.dp)
     ) {
@@ -261,12 +262,7 @@ private fun VerseBlock(
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.Top
         ) {
-            Box(
-                modifier = Modifier
-                    .clickable(onClick = onPlayClick)
-            ) {
-                AyahBadge(number = verse.numberInSurah)
-            }
+            AyahBadge(number = verse.numberInSurah)
             Spacer(Modifier.width(16.dp))
             Text(
                 text = verse.arabic,

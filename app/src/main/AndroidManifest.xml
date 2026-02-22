@@ -76,6 +76,32 @@
             android:name=".services.EzanForegroundService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!--
+            NextPrayerWidget — Jetpack Glance home screen widget.
+            - APPWIDGET_UPDATE action: sistem widget güncelleme trigger'ı
+            - meta-data android.appwidget.provider: widget konfigürasyonu
+        -->
+        <receiver
+            android:name=".presentation.widget.NextPrayerWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.islam.action.REFRESH_WIDGET" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/next_prayer_widget_info" />
+        </receiver>
+
+        <!-- Firebase Cloud Messaging — Ramazan bildirimleri, genel duyurular -->
+        <service
+            android:name=".services.MusliAppFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>
