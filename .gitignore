@@ -13,3 +13,11 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Firebase — gizli, repoya ekleme
+google-services.json
+
+# Keystore dosyaları — repoya ekleme
+*.jks
+*.keystore
+keystore.properties
