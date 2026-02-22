@@ -1,0 +1,460 @@
+package com.example.islam.presentation.home
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import com.example.islam.R
+import androidx.compose.ui.unit.sp
+import com.example.islam.ui.theme.AmiriFamily
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Referans HTML/CSS renkleri (Tailwind config)
+// ─────────────────────────────────────────────────────────────────────────────
+private val RefPrimary = Color(0xFFD4AF37)           // Gold
+private val RefBackgroundDark = Color(0xFF0B2419)   // Deep Emerald Green
+private val RefSurfaceCard = Color(0xFF133326)      // Card background
+private val RefSurfaceCard60 = Color(0x99133326)    // surface-card/60
+private val RefBorderPrimary30 = Color(0x4DD4AF37)  // primary/30
+private val RefBorderPrimary40 = Color(0x66D4AF37)  // primary/40
+private val RefBorderPrimary50 = Color(0x80D4AF37)  // primary/50
+private val RefBorderWhite5 = Color(0x0DFFFFFF)     // white/5
+private val RefTextGray100 = Color(0xFFF3F4F6)      // gray-100
+private val RefTextGray200 = Color(0xFFE5E7EB)      // gray-200
+private val RefTextGray300 = Color(0xFFD1D5DB)      // gray-300
+private val RefTextGray400 = Color(0xFF9CA3AF)      // gray-400
+private val RefPrimary70 = Color(0xB3D4AF37)       // primary/70
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Veri modeli (mevcut)
+// ─────────────────────────────────────────────────────────────────────────────
+data class PrayerDisplayItem(
+    val name: String,
+    val time: String,
+    val icon: ImageVector,
+    val iconTint: Color,
+    val isActive: Boolean = false
+)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DawnHomeScreen — Referans ekran görüntüsüne birebir uyumlu
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+fun DawnHomeScreen(
+    prayerName: String = "Sabah",
+    time: String = "06:19",
+    countdown: String = "Sonraki vakte 8s 33dk",
+    gregorianDate: String = "21 Şubat 2026, Cumartesi",
+    hijriDate: String = "4 رمضان 1447",
+    verseText: String = "\"Allah, O'ndan başka ilah olmayandır. Diridir, kayyumdur. O'nu ne uyuklama ne de uyku tutar. Göklerde ve yerde ne varsa hepsi O'nundur.\"",
+    verseRef: String = "Bakara, 255 (Âyetü'l-Kürsî)",
+    prayerItems: List<PrayerDisplayItem> = defaultPrayerItems(),
+    onQiblaClick: () -> Unit = {},
+    onTasbihClick: () -> Unit = {}
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(RefBackgroundDark)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 96.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 24.dp)
+                    .padding(top = 24.dp, bottom = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // ── Üst: Tarih + Hicri + Namaz adı + Saat + Geri sayım ───────
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Spacer(Modifier.height(8.dp))
+                    // Miladi tarih — uppercase, küçük, gri
+                    Text(
+                        text = gregorianDate.uppercase(),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 0.5.sp,
+                        color = RefTextGray300
+                    )
+                    // Hicri — gün numarası altın, geri kalanı gri (Amiri)
+                    HijriDateText(hijriDate = hijriDate)
+                    Spacer(Modifier.height(12.dp))
+                    // Namaz adı — Playfair benzeri büyük serif
+                    Text(
+                        text = prayerName,
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.Normal,
+                        fontFamily = FontFamily.Serif,
+                        letterSpacing = 0.5.sp,
+                        color = RefTextGray200
+                    )
+                    // Saat — çok büyük
+                    Text(
+                        text = time,
+                        fontSize = 88.sp,
+                        lineHeight = 88.sp,
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = FontFamily.Serif,
+                        letterSpacing = (-0.5).sp,
+                        color = Color.White
+                    )
+                    // Geri sayım pill
+                    Row(
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .clip(RoundedCornerShape(50.dp))
+                            .background(RefSurfaceCard.copy(alpha = 0.4f))
+                            .border(1.dp, RefBorderPrimary30, RoundedCornerShape(50.dp))
+                            .padding(horizontal = 20.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Schedule,
+                            contentDescription = null,
+                            tint = RefPrimary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = countdown,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = RefTextGray200
+                        )
+                    }
+                }
+
+                // ── Ayet kartı (kalan alanı doldurur, tek sayfada sığar) ──────
+                Spacer(Modifier.height(12.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(vertical = 4.dp)
+                ) {
+                    // Arka plan glow
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(RefPrimary.copy(alpha = 0.1f))
+                            .graphicsLayer { alpha = 0.6f }
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(RefSurfaceCard60)
+                            .border(1.dp, RefBorderPrimary30, RoundedCornerShape(32.dp))
+                            .padding(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.FormatQuote,
+                            contentDescription = null,
+                            tint = RefPrimary70,
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .size(22.dp)
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = verseText,
+                            fontSize = 18.sp,
+                            fontFamily = FontFamily.Serif,
+                            fontStyle = FontStyle.Italic,
+                            lineHeight = 28.sp,
+                            color = RefTextGray100.copy(alpha = 0.95f),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = verseRef.uppercase(),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.2.sp,
+                            color = RefPrimary,
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        )
+                    }
+                }
+
+                // ── Kıble & Tespih butonları ───────────────────────────────────
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    KibleButton(onClick = onQiblaClick, modifier = Modifier.weight(1f))
+                    TespihButton(onClick = onTasbihClick, modifier = Modifier.weight(1f))
+                }
+                // ── Namaz vakitleri satırı (aynı Column içinde, üst üste binmez) ─
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    prayerItems.forEach { item ->
+                        PrayerTimeChip(item = item)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HijriDateText(hijriDate: String) {
+    val parts = hijriDate.trim().split(" ", limit = 2)
+    val dayPart = parts.getOrNull(0) ?: ""
+    val restPart = if (parts.size > 1) " ${parts[1]}" else ""
+    Text(
+        text = buildAnnotatedString {
+            withStyle(SpanStyle(color = RefPrimary, fontFamily = AmiriFamily)) {
+                append(dayPart)
+            }
+            withStyle(SpanStyle(color = RefTextGray300, fontFamily = AmiriFamily)) {
+                append(restPart)
+            }
+        },
+        fontSize = 18.sp,
+        fontFamily = AmiriFamily
+    )
+}
+
+@Composable
+private fun KibleButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    androidx.compose.material3.Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(24.dp))
+            .border(1.dp, RefBorderPrimary40, RoundedCornerShape(24.dp)),
+        color = Color.Transparent,
+        onClick = onClick,
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 14.dp, horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(RefSurfaceCard)
+                    .border(1.dp, RefBorderPrimary40, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.ic_kaaba),
+                    contentDescription = "Kıble",
+                    modifier = Modifier.size(18.dp),
+                    colorFilter = ColorFilter.tint(RefPrimary)
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = "Kıble",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = RefTextGray200
+            )
+        }
+    }
+}
+
+@Composable
+private fun TespihButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    androidx.compose.material3.Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(24.dp))
+            .border(1.dp, RefBorderPrimary40, RoundedCornerShape(24.dp)),
+        color = Color.Transparent,
+        onClick = onClick,
+        shape = RoundedCornerShape(24.dp)
+    ) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 14.dp, horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(RefSurfaceCard)
+                .border(1.dp, RefBorderPrimary40, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_tesbih),
+                contentDescription = "Tespih",
+                modifier = Modifier.size(18.dp),
+                colorFilter = ColorFilter.tint(RefPrimary)
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = "Tespih",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            color = RefTextGray200
+        )
+    }
+    }
+}
+
+@Composable
+private fun PrayerTimeChip(item: PrayerDisplayItem) {
+    val (bg, borderColor, contentColor, nameColor) = if (item.isActive) {
+        PrayerChipColors(
+            RefSurfaceCard,
+            RefBorderPrimary50,
+            Color.White,
+            RefPrimary
+        )
+    } else {
+        PrayerChipColors(
+            RefSurfaceCard.copy(alpha = 0.3f),
+            RefBorderWhite5,
+            RefTextGray300,
+            RefTextGray400
+        )
+    }
+    Column(
+        modifier = Modifier
+            .then(if (item.isActive) Modifier else Modifier.alpha(0.7f))
+            .widthIn(min = 64.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .then(
+                if (item.isActive) Modifier.shadow(8.dp, RoundedCornerShape(24.dp), spotColor = RefPrimary.copy(alpha = 0.15f))
+                else Modifier
+            )
+            .background(bg)
+            .border(1.dp, borderColor, RoundedCornerShape(24.dp))
+            .padding(vertical = 12.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = item.icon,
+            contentDescription = item.name,
+            tint = if (item.isActive) RefPrimary else RefTextGray400,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = item.name.uppercase(),
+            fontSize = 10.sp,
+            fontWeight = if (item.isActive) FontWeight.Bold else FontWeight.Medium,
+            letterSpacing = 0.5.sp,
+            color = nameColor
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = item.time,
+            fontSize = 14.sp,
+            fontWeight = if (item.isActive) FontWeight.SemiBold else FontWeight.Medium,
+            color = contentColor
+        )
+    }
+}
+
+private data class PrayerChipColors(
+    val bg: Color,
+    val borderColor: Color,
+    val contentColor: Color,
+    val nameColor: Color
+)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Varsayılan namaz öğeleri (referans ikonlarına uygun)
+// ─────────────────────────────────────────────────────────────────────────────
+fun defaultPrayerItems() = listOf(
+    PrayerDisplayItem(
+        name = "Sabah",
+        time = "06:19",
+        icon = Icons.Outlined.DarkMode,
+        iconTint = RefPrimary,
+        isActive = true
+    ),
+    PrayerDisplayItem(
+        name = "Öğle",
+        time = "13:23",
+        icon = Icons.Outlined.WbSunny,
+        iconTint = RefTextGray400,
+        isActive = false
+    ),
+    PrayerDisplayItem(
+        name = "İkindi",
+        time = "16:21",
+        icon = Icons.Outlined.WbTwilight,
+        iconTint = RefTextGray400,
+        isActive = false
+    ),
+    PrayerDisplayItem(
+        name = "Akşam",
+        time = "18:53",
+        icon = Icons.Outlined.WbTwilight,
+        iconTint = RefTextGray400,
+        isActive = false
+    ),
+    PrayerDisplayItem(
+        name = "Yatsı",
+        time = "20:12",
+        icon = Icons.Outlined.Brightness2,
+        iconTint = RefTextGray400,
+        isActive = false
+    )
+)
+
+@Preview(name = "Dawn Home - Referans", showBackground = true, widthDp = 390, heightDp = 844)
+@Composable
+private fun DawnHomeScreenPreview() {
+    DawnHomeScreen()
+}

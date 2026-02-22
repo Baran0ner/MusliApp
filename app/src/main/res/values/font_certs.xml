@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Google Play Services (GMS) Font sağlayıcısı için resmi sertifika hash'leri.
+    Compose Google Fonts kütüphanesi bu değerleri güvenli şekilde doğrulamak için kullanır.
+    Kaynak: https://developer.android.com/guide/topics/ui/look-and-feel/downloadable-fonts
+-->
+<resources>
+    <array name="com_google_android_gms_fonts_certs">
+        <item>@array/com_google_android_gms_fonts_certs_dev</item>
+        <item>@array/com_google_android_gms_fonts_certs_prod</item>
+    </array>
+
+    <string-array name="com_google_android_gms_fonts_certs_dev">
+        <item>
+            MIIEqDCCA5CgAwIBAgIJANWFuGx90071MA0GCSqGSIb3DQEBBAUAMIGUMQswCQYDVQQGEwJVUzETMBEGA1UECBMKQ2FsaWZvcm5pYTEWMBQGA1UEBxMNTW91bnRhaW4gVmlldzEQMA4GA1UEChMHQW5kcm9pZDEQMA4GA1UECxMHQW5kcm9pZDEQMA4GA1UEAxMJQW5kcm9pZCBDQTEiMCAGCSqGSIb3DQEJARYTZW5naW5lZXJpbmdAYW5kcm9pZC5jb20wHhcNMDgwNjA1MDMxNjE0WhcNMzUxMDMwMDMxNjE0WjCBlDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCkNhbGlmb3JuaWExFjAUBgNVBAcTDU1vdW50YWluIFZpZXcxEDAOBgNVBAoTB0FuZHJvaWQxEDAOBgNVBAsTB0FuZHJvaWQxEDAOBgNVBAMTCUFuZHJvaWQgQ0ExIjAgBgkqhkiG9w0BCQEWE2VuZ2luZWVyaW5nQGFuZHJvaWQuY29tMIIBIDANBgkqhkiG9w0BAQEFAAOCAQ0AMIIBCAKCAQEAxot/YYK6+7NnC4bEGcXLhZZ8MnB/9TY4oFZr62GOKF0lTKSoQG7JjFsXGl71m4Qr6xtdJ1PxPQCvj3MHGkTaYyOyv8OA1JmfxJdPraLb6c0LfuQhULJiNGrSW6bVQLSyCjT1lMwFh4sZbr/4fJXoJqyblGC/PWZL9c/zXNGVJkSRF3sO5h0e4E8vCuAm1FZaI4oqCbOHNlnN9c0N/2gFIUniW4YFl10ZX7Rjxr1JjK2x/fxZ9D6wLpVe+sRNbGE6r6gqg4WtPUjxq3Mra4MnCT3zPvT7abXF0T7Uk3s0GrydWoGX8lFVxh35V3JxaUmmpK1H5KgywdEIqz/wIBAw==
+        </item>
+    </string-array>
+
+    <string-array name="com_google_android_gms_fonts_certs_prod">
+        <item>
+            MIIEQzCCAyugAwIBAgIJAMLgh0ZkSjCNMA0GCSqGSIb3DQEBBAUAMHQxCzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpDYWxpZm9ybmlhMRYwFAYDVQQHEw1Nb3VudGFpbiBWaWV3MRQwEgYDVQQKEwtHb29nbGUgSW5jLjEQMA4GA1UECxMHQW5kcm9pZDEQMA4GA1UEAxMHQW5kcm9pZDCCASAwDQYJKoZIhvcNAQEBBQADggENADCCAQgCggEBAKtWLgDYO6IIrgqWbxJOKdoR8qtW0I9Y4sypEwPpt1TTcvZApxsdyxMJAWXFqTAfd0BTcg84bKBDFKb9bvxHQQNfGg0FFBWKfez7a5jbGrHHRVKUOh3kGNOhSOFoH9UbSEXkJiTPbXNeI9JVqENbXBKL5sEFfhLqT/fYSM7TelHxbm9pNyC3F3t5VUhSBNYQT4b0JZzNjg/5wX/KlgNK9RN/iG4TZNHF3gg7Z5Z1BTBG1MCIQDzJt1OfmhANVMkFtfBIOFZKqEeEByEG5SHVBcivgEflmCAQIDAAGjgfwwgfkwHQYDVR0OBBYEFMd9jMIhF1Uu3yAEFxvVL7mSdX5YMIHJBgNVHSMEgcEwgb6AFMd9jMIhF1Uu3yAEFxvVL7mSdX5YoYGapIGXMHQxCzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpDYWxpZm9ybmlhMRYwFAYDVQQHEw1Nb3VudGFpbiBWaWV3MRQwEgYDVQQKEwtHb29nbGUgSW5jLjEQMA4GA1UECxMHQW5kcm9pZDEQMA4GA1UEAxMHQW5kcm9pZIIJAMLgh0ZkSjCNMAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQEEBQADggEBABt0lLO74UwLDYKqs6Tm8/yzKkEu116FmH4rkaymUIE0P9KaMftGlMexFlaYjzmB2OxZyl6euNXEsQH8gjwyxCUKRJNexBiGcCEyj6z+a1fuHHvkiaai+KL8W1EyNmgjmyy8AW7P+LLlkR+ho5zEHatRbM/YAnqx0omeIedk8hpyVhnZYKLAiInNMfAvAlY8Kqz9e57L3Yj/AZpFKi8xkNKMGEIgpbJK6K3l9QDCx17tC6eDN3Nt9D6skNpdzbaF03tHbMHgJAuLb
+        </item>
+    </string-array>
+</resources>
