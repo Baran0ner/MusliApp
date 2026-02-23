@@ -9,9 +9,11 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.islam.core.util.DateUtil
+import com.example.islam.core.util.DateUtil.cleanTime
 import com.example.islam.core.util.Resource
 import com.example.islam.data.datastore.UserPreferencesDataStore
 import com.example.islam.domain.model.DailyQuote
+import com.example.islam.domain.model.PrayerPhase
 import com.example.islam.domain.model.PrayerTime
 import com.example.islam.domain.model.UserPreferences
 import com.example.islam.domain.utils.LocationTracker
@@ -69,6 +71,10 @@ class HomeViewModel @Inject constructor(
     )
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
+    /** Gökyüzü Yansımaları: Günün vaktine göre arka plan fazı (2–3 sn yumuşak geçiş için UI dinler). */
+    private val _currentPrayerPhase = MutableStateFlow(PrayerPhase.NIGHT)
+    val currentPrayerPhase: StateFlow<PrayerPhase> = _currentPrayerPhase.asStateFlow()
+
     init {
         if (_uiState.value.permissionsGranted) observePreferences()
         startCountdownTicker()
@@ -125,6 +131,7 @@ class HomeViewModel @Inject constructor(
                         countdownText = DateUtil.formatCountdown(next.millisUntil)
                     )
                 }
+                _currentPrayerPhase.value = computePrayerPhase(pt)
             }
             is Resource.Error -> {
                 _uiState.update { it.copy(isLoading = false, error = result.message) }
@@ -147,7 +154,7 @@ class HomeViewModel @Inject constructor(
                         )
                     }
                 } else {
-                    // Namaz vakti geldi → bir sonrakini hesapla
+                    // Namaz vakti geldi → bir sonrakini hesapla ve fazı güncelle
                     _uiState.value.prayerTime?.let { pt ->
                         val newNext = getNextPrayerUseCase(pt)
                         _uiState.update {
@@ -156,6 +163,7 @@ class HomeViewModel @Inject constructor(
                                 countdownText = DateUtil.formatCountdown(newNext.millisUntil)
                             )
                         }
+                        _currentPrayerPhase.value = computePrayerPhase(pt)
                     }
                 }
             }
@@ -191,6 +199,28 @@ class HomeViewModel @Inject constructor(
             if (diffDays >= 0) return diffDays
         }
         return null
+    }
+
+    /**
+     * Mevcut saati namaz vakitleriyle kıyaslayarak şu anki [PrayerPhase] değerini döndürür.
+     * DAWN: fajr–dhuhr, NOON: dhuhr–asr, AFTERNOON: asr–maghrib, SUNSET: maghrib–isha, NIGHT: isha–fajr.
+     */
+    private fun computePrayerPhase(pt: PrayerTime): PrayerPhase {
+        val now = Calendar.getInstance()
+        val fajrCal = DateUtil.todayCalendarAt(pt.fajr.cleanTime())
+        val dhuhrCal = DateUtil.todayCalendarAt(pt.dhuhr.cleanTime())
+        val asrCal = DateUtil.todayCalendarAt(pt.asr.cleanTime())
+        val maghribCal = DateUtil.todayCalendarAt(pt.maghrib.cleanTime())
+        val ishaCal = DateUtil.todayCalendarAt(pt.isha.cleanTime())
+
+        return when {
+            now.before(fajrCal) || !now.before(ishaCal) -> PrayerPhase.NIGHT   // isha → 00:00 → fajr
+            !now.before(fajrCal) && now.before(dhuhrCal) -> PrayerPhase.DAWN
+            !now.before(dhuhrCal) && now.before(asrCal) -> PrayerPhase.NOON
+            !now.before(asrCal) && now.before(maghribCal) -> PrayerPhase.AFTERNOON
+            !now.before(maghribCal) && now.before(ishaCal) -> PrayerPhase.SUNSET
+            else -> PrayerPhase.NIGHT
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

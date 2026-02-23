@@ -3,6 +3,7 @@ package com.example.islam.di
 import android.content.Context
 import androidx.room.Room
 import com.example.islam.data.local.dao.DhikrDao
+import com.example.islam.data.local.dao.DhikrHistoryDao
 import com.example.islam.data.local.dao.PrayerHistoryDao
 import com.example.islam.data.local.dao.PrayerTimeDao
 import com.example.islam.data.local.database.IslamDatabase
@@ -25,7 +26,7 @@ object DatabaseModule {
             IslamDatabase::class.java,
             IslamDatabase.DATABASE_NAME
         )
-            .addMigrations(IslamDatabase.MIGRATION_1_2, IslamDatabase.MIGRATION_2_3)
+            .addMigrations(IslamDatabase.MIGRATION_1_2, IslamDatabase.MIGRATION_2_3, IslamDatabase.MIGRATION_3_4)
             .build()
 
     @Provides
@@ -36,4 +37,7 @@ object DatabaseModule {
 
     @Provides
     fun providePrayerHistoryDao(db: IslamDatabase): PrayerHistoryDao = db.prayerHistoryDao()
+
+    @Provides
+    fun provideDhikrHistoryDao(db: IslamDatabase): DhikrHistoryDao = db.dhikrHistoryDao()
 }

@@ -45,6 +45,11 @@ data class AppStrings(
     val dhikrCounter: String,
     val reset: String,
     val dhikrCompleted: String,
+    val saveDhikr: String,
+    val noDhikrToday: String,
+    val dhikrCycleCompletedFormat: String,   // örn: "%d. devir tamamlandı"
+    val dhikrWeeklyTitle: String,            // örn: "HAFTALIK DURUM"
+    val dhikrWeeklySummaryFormat: String,    // örn: "%d/7 Gün"
 
     // Kıble ekranı
     val qiblaDirection: String,
@@ -151,6 +156,11 @@ val TurkishStrings = AppStrings(
     dhikrCounter  = "Zikirmatik",
     reset         = "Sıfırla",
     dhikrCompleted = "مَاشَاءَ اللّٰهُ  •  Tamamlandı! 🌿",
+    saveDhikr      = "Kaydet",
+    noDhikrToday   = "Bu gün kayıtlı tespih yok.",
+    dhikrCycleCompletedFormat = "%d. devir tamamlandı",
+    dhikrWeeklyTitle          = "HAFTALIK DURUM",
+    dhikrWeeklySummaryFormat  = "%d/7 Gün",
 
     qiblaDirection      = "Kıble Yönü",
     qiblaAligned        = "✅ Kıbleye yöneldiniz!",
@@ -250,6 +260,11 @@ val EnglishStrings = AppStrings(
     dhikrCounter  = "Dhikr Counter",
     reset         = "Reset",
     dhikrCompleted = "مَاشَاءَ اللّٰهُ  •  Completed! 🌿",
+    saveDhikr      = "Save",
+    noDhikrToday   = "No dhikr recorded for this day.",
+    dhikrCycleCompletedFormat = "Cycle %d completed",
+    dhikrWeeklyTitle          = "WEEKLY SUMMARY",
+    dhikrWeeklySummaryFormat  = "%d/7 Days",
 
     qiblaDirection      = "Qibla Direction",
     qiblaAligned        = "✅ You're facing the Qibla!",
@@ -349,6 +364,11 @@ val ArabicStrings = AppStrings(
     dhikrCounter  = "عداد الذكر",
     reset         = "إعادة",
     dhikrCompleted = "مَاشَاءَ اللّٰهُ  •  مكتمل! 🌿",
+    saveDhikr      = "حفظ",
+    noDhikrToday   = "لا يوجد أذكار مسجلة لهذا اليوم.",
+    dhikrCycleCompletedFormat = "اكتمل الدورة %d",
+    dhikrWeeklyTitle          = "ملخص الأسبوع",
+    dhikrWeeklySummaryFormat  = "%d/7 أيام",
 
     qiblaDirection      = "اتجاه القبلة",
     qiblaAligned        = "✅ أنت تواجه القبلة!",

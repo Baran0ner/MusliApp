@@ -5,21 +5,24 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.islam.data.local.dao.DhikrDao
+import com.example.islam.data.local.dao.DhikrHistoryDao
 import com.example.islam.data.local.dao.PrayerHistoryDao
 import com.example.islam.data.local.dao.PrayerTimeDao
 import com.example.islam.data.local.entity.DhikrEntity
+import com.example.islam.data.local.entity.DhikrHistoryEntity
 import com.example.islam.data.local.entity.PrayerHistoryEntity
 import com.example.islam.data.local.entity.PrayerTimeEntity
 
 @Database(
-    entities = [PrayerTimeEntity::class, DhikrEntity::class, PrayerHistoryEntity::class],
-    version  = 3,
+    entities = [PrayerTimeEntity::class, DhikrEntity::class, PrayerHistoryEntity::class, DhikrHistoryEntity::class],
+    version  = 4,
     exportSchema = false
 )
 abstract class IslamDatabase : RoomDatabase() {
-    abstract fun prayerTimeDao()   : PrayerTimeDao
-    abstract fun dhikrDao()        : DhikrDao
-    abstract fun prayerHistoryDao(): PrayerHistoryDao
+    abstract fun prayerTimeDao()      : PrayerTimeDao
+    abstract fun dhikrDao()           : DhikrDao
+    abstract fun prayerHistoryDao()   : PrayerHistoryDao
+    abstract fun dhikrHistoryDao()    : DhikrHistoryDao
 
     companion object {
         const val DATABASE_NAME = "islam_db"
@@ -42,6 +45,21 @@ abstract class IslamDatabase : RoomDatabase() {
                         isAsrPrayed INTEGER NOT NULL DEFAULT 0,
                         isMaghribPrayed INTEGER NOT NULL DEFAULT 0,
                         isIshaPrayed INTEGER NOT NULL DEFAULT 0
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS dhikr_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        date TEXT NOT NULL,
+                        dhikrName TEXT NOT NULL,
+                        count INTEGER NOT NULL
                     )
                     """.trimIndent()
                 )

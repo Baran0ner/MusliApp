@@ -150,8 +150,8 @@ class CompassTracker @Inject constructor(
 
         }.distinctUntilChanged { old, new ->
             // Azimut farkı eşik altındaysa yeni emit yapma (gereksiz recomposition önlenir)
-            abs(old.azimuth.roundToInt() - new.azimuth.roundToInt()) < MIN_ANGLE_CHANGE &&
-                    abs(old.bearingToQibla.roundToInt() - new.bearingToQibla.roundToInt()) < MIN_ANGLE_CHANGE
+            circularDiffDeg(old.azimuth, new.azimuth).roundToInt() < MIN_ANGLE_CHANGE &&
+                    circularDiffDeg(old.bearingToQibla, new.bearingToQibla).roundToInt() < MIN_ANGLE_CHANGE
         }
     }
 
@@ -190,4 +190,13 @@ class CompassTracker @Inject constructor(
 
     /** Herhangi bir dereceyi 0–360° aralığına normalize eder. */
     private fun normalizeDegrees(degrees: Float): Float = (degrees + 360f) % 360f
+
+    /**
+     * Dairesel açı farkı (derece) — 0/360 geçişinde büyük sıçramayı engeller.
+     * Sonuç 0..180 aralığındadır.
+     */
+    private fun circularDiffDeg(a: Float, b: Float): Float {
+        val diff = (a - b + 540f) % 360f - 180f
+        return abs(diff)
+    }
 }

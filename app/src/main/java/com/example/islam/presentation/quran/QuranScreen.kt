@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.islam.core.i18n.LocalStrings
 import com.example.islam.core.navigation.Screen
 import com.example.islam.domain.model.JuzListModel
 import com.example.islam.domain.model.SurahListModel
@@ -58,6 +59,7 @@ fun QuranScreen(
     navController: NavController,
     viewModel: QuranViewModel = hiltViewModel()
 ) {
+    val strings = LocalStrings.current
     var selectedTab by remember { mutableStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
     var searchExpanded by remember { mutableStateOf(false) }
@@ -118,7 +120,7 @@ fun QuranScreen(
                                 onClick = { viewModel.loadSurahs(refresh = true) },
                                 colors = ButtonDefaults.buttonColors(containerColor = RefPrimary),
                                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
-                            ) { Text("Tekrar Dene", color = RefBackgroundDark) }
+                            ) { Text(strings.retryButton, color = RefBackgroundDark) }
                         }
                     }
                 }

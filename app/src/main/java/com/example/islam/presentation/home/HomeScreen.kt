@@ -9,12 +9,18 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
@@ -35,7 +41,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -55,10 +63,18 @@ import com.example.islam.core.i18n.LocalStrings
 import com.example.islam.core.navigation.Screen
 import com.example.islam.domain.model.DailyQuote
 import com.example.islam.domain.model.Prayer
+import com.example.islam.domain.model.PrayerPhase
 import com.example.islam.domain.model.PrayerTime
 import com.example.islam.domain.model.QuoteType
 import com.example.islam.domain.model.timeFor
 import com.example.islam.core.util.DateUtil.cleanTime
+import com.example.islam.ui.theme.EmeraldBg
+import com.example.islam.ui.theme.EmeraldBgDarker
+import com.example.islam.ui.theme.SkyAfternoonTop
+import com.example.islam.ui.theme.SkyDawnTop
+import com.example.islam.ui.theme.SkyNightTop
+import com.example.islam.ui.theme.SkyNoonTop
+import com.example.islam.ui.theme.SkySunsetTop
 
 // ─────────────────────────────────────────────────────────────────────────────
 // İçerik durumları
@@ -164,19 +180,172 @@ fun HomeScreen(
         )
     } ?: defaultPrayerItems()
 
-    // ── DawnHomeScreen'i gerçek verilerle göster ─────────────────────────────
-    DawnHomeScreen(
-        prayerName    = prayerNameStr,
-        time          = prayerTimeStr,
-        countdown     = countdownStr,
-        gregorianDate = gregorianStr,
-        hijriDate     = hijriStr,
-        verseText     = verseText,
-        verseRef      = verseRef,
-        prayerItems   = prayerItems,
-        onQiblaClick  = { navController.navigate(Screen.Qibla.route) },
-        onTasbihClick = { navController.navigate(Screen.Dhikr.route) }
+    // ── Gökyüzü Yansımaları: vakte göre animasyonlu gradyan arka plan ───────
+    val prayerPhase by viewModel.currentPrayerPhase.collectAsState()
+    val gradientTop by animateColorAsState(
+        targetValue = when (prayerPhase) {
+            PrayerPhase.DAWN     -> SkyDawnTop
+            PrayerPhase.NOON    -> SkyNoonTop
+            PrayerPhase.AFTERNOON -> SkyAfternoonTop
+            PrayerPhase.SUNSET  -> SkySunsetTop
+            PrayerPhase.NIGHT   -> SkyNightTop
+        },
+        animationSpec = tween(durationMillis = 2500),
+        label = "skyGradientTop"
     )
+    val gradientBottom by animateColorAsState(
+        targetValue = if (prayerPhase == PrayerPhase.NIGHT) EmeraldBgDarker else EmeraldBg,
+        animationSpec = tween(durationMillis = 2500),
+        label = "skyGradientBottom"
+    )
+    val skyBrush = Brush.verticalGradient(
+        colors = listOf(gradientTop, gradientBottom)
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(skyBrush)
+    ) {
+        // Öğle vaktinde gökyüzünde tatlı, animasyonlu güneş
+        SkyPhaseDecoration(phase = prayerPhase)
+        DawnHomeScreen(
+            prayerName    = prayerNameStr,
+            time          = prayerTimeStr,
+            countdown     = countdownStr,
+            gregorianDate = gregorianStr,
+            hijriDate     = hijriStr,
+            verseText     = verseText,
+            verseRef      = verseRef,
+            prayerItems   = prayerItems,
+            onQiblaClick  = { navController.navigate(Screen.Qibla.route) },
+            onTasbihClick = { navController.navigate(Screen.Dhikr.route) }
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gökyüzü süslemesi — vakte göre güneş/ay (tatlı, animasyonlu)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun SkyPhaseDecoration(phase: PrayerPhase) {
+    val infiniteTransition = rememberInfiniteTransition(label = "skyDecoration")
+    val sunScale by infiniteTransition.animateFloat(
+        initialValue = 0.96f,
+        targetValue = 1.04f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2800),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "sunScale"
+    )
+    val sunAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.72f,
+        targetValue = 0.88f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3200),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "sunAlpha"
+    )
+
+    when (phase) {
+        PrayerPhase.NOON -> {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(top = 32.dp)
+                    .scale(sunScale)
+                    .alpha(sunAlpha),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Canvas(modifier = Modifier.size(120.dp)) {
+                    val r = size.minDimension / 2f
+                    val c = Offset(r, r)
+                    // Dış hale — yumuşak altın
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFE8C547).copy(alpha = 0.35f),
+                                Color(0xFFD4AF37).copy(alpha = 0.18f),
+                                Color.Transparent
+                            ),
+                            center = c,
+                            radius = r
+                        )
+                    )
+                    // İç çekirdek — hafif daha parlak
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFF5E6A3).copy(alpha = 0.5f),
+                                Color(0xFFE8C547).copy(alpha = 0.2f),
+                                Color.Transparent
+                            ),
+                            center = c,
+                            radius = r * 0.5f
+                        )
+                    )
+                }
+            }
+        }
+        PrayerPhase.AFTERNOON -> {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(top = 40.dp)
+                    .scale(sunScale * 0.92f)
+                    .alpha(sunAlpha * 0.7f),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Canvas(modifier = Modifier.size(90.dp)) {
+                    val r = size.minDimension / 2f
+                    val c = Offset(r, r)
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFE8B84A).copy(alpha = 0.28f),
+                                Color(0xFFD4AF37).copy(alpha = 0.12f),
+                                Color.Transparent
+                            ),
+                            center = c,
+                            radius = r
+                        )
+                    )
+                }
+            }
+        }
+        PrayerPhase.DAWN -> {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(top = 56.dp)
+                    .scale(sunScale * 0.85f)
+                    .alpha(sunAlpha * 0.5f),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Canvas(modifier = Modifier.size(70.dp)) {
+                    val r = size.minDimension / 2f
+                    val c = Offset(r, r)
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFF5E6A3).copy(alpha = 0.22f),
+                                Color.Transparent
+                            ),
+                            center = c,
+                            radius = r
+                        )
+                    )
+                }
+            }
+        }
+        PrayerPhase.SUNSET, PrayerPhase.NIGHT -> { /* Akşam/gece: sadece gradyan */ }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

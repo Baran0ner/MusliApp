@@ -96,10 +96,20 @@ val AdmTextLight        = Color(0xFFCCCCCC)   // --adm-color-light
 // Koyu Zümrüt Yeşili — Uygulamanın ana koyu arka planı (dark tema)
 // ─────────────────────────────────────────────────────────────────────────────
 val EmeraldBg           = Color(0xFF0A1F14)   // Ana arka plan: derin zümrüt
+val EmeraldBgDarker     = Color(0xFF061810)   // %5 daha koyu (NIGHT gradyan altı)
 val EmeraldCard         = Color(0xFF122A1C)   // Kart arka planı: biraz daha açık
 val EmeraldCardHigh     = Color(0xFF1A3826)   // Yüksek kontrast kart yüzeyi
 val EmeraldCardBorder   = Color(0xFF1E3D28)   // Kart kenarlığı
 val EmeraldSurface      = Color(0xFF0D2018)   // Yüzey (bottom nav bg ile aynı)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gökyüzü Yansımaları — Vakte özel gradyan üst renkleri (alt = EmeraldBg, premium & subtle)
+// ─────────────────────────────────────────────────────────────────────────────
+val SkyDawnTop          = Color(0xFF0E1628)   // DAWN: Koyu lacivert
+val SkyNoonTop          = Color(0xFF1A1F0E)   // NOON: Yumuşak altın/amber (çok hafif)
+val SkyAfternoonTop    = Color(0xFF1F180A)   // AFTERNOON: Hafif turuncu/sıcak sarı
+val SkySunsetTop        = Color(0xFF1A0E14)   // SUNSET: Derin kızıl/morumsu
+val SkyNightTop         = Color(0xFF0A1F14)   // NIGHT: Ana koyu yeşil (gradyan altı EmeraldBgDarker)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sarı/Turuncu Uyarı — Pil optimizasyonu banner'ı için (kırmızı yerine)

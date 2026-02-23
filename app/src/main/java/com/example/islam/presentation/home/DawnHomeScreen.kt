@@ -83,9 +83,7 @@ fun DawnHomeScreen(
     onTasbihClick: () -> Unit = {}
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(RefBackgroundDark)
+        modifier = Modifier.fillMaxSize()
     ) {
         Box(
             modifier = Modifier
@@ -113,18 +111,7 @@ fun DawnHomeScreen(
                         letterSpacing = 0.5.sp,
                         color = RefTextGray300
                     )
-                    // Hicri — gün numarası altın, geri kalanı gri (Amiri)
-                    HijriDateText(hijriDate = hijriDate)
-                    Spacer(Modifier.height(6.dp))
-                    // Namaz adı — serif
-                    Text(
-                        text = prayerName,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Normal,
-                        fontFamily = FontFamily.Serif,
-                        letterSpacing = 0.5.sp,
-                        color = RefTextGray200
-                    )
+                    Spacer(Modifier.height(10.dp))
                     // Saat — büyük ama ekranı doldurmayacak kadar
                     Text(
                         text = time,

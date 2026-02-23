@@ -4,9 +4,12 @@ import com.example.islam.data.remote.api.AladhanApi
 import com.example.islam.data.local.dao.DhikrDao
 import com.example.islam.data.local.dao.PrayerHistoryDao
 import com.example.islam.data.local.dao.PrayerTimeDao
+import com.example.islam.data.local.dao.DhikrHistoryDao
+import com.example.islam.data.repository.DhikrHistoryRepositoryImpl
 import com.example.islam.data.repository.DhikrRepositoryImpl
 import com.example.islam.data.repository.PrayerHistoryRepositoryImpl
 import com.example.islam.data.repository.PrayerTimeRepositoryImpl
+import com.example.islam.domain.repository.DhikrHistoryRepository
 import com.example.islam.domain.repository.DhikrRepository
 import com.example.islam.domain.repository.PrayerHistoryRepository
 import com.example.islam.domain.repository.PrayerTimeRepository
@@ -38,4 +41,10 @@ object AppModule {
     fun providePrayerHistoryRepository(
         dao: PrayerHistoryDao
     ): PrayerHistoryRepository = PrayerHistoryRepositoryImpl(dao)
+
+    @Provides
+    @Singleton
+    fun provideDhikrHistoryRepository(
+        dao: DhikrHistoryDao
+    ): DhikrHistoryRepository = DhikrHistoryRepositoryImpl(dao)
 }

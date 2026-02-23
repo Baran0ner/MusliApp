@@ -19,6 +19,7 @@ import com.example.islam.core.util.DateUtil.cleanTime
 import com.example.islam.core.util.DateUtil.formatCountdown
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,11 +34,10 @@ data class PrayerUiState(
     val prayerTime       : PrayerTime?      = null,
     val currentPrayer    : Prayer?          = null,
     val nextPrayer       : NextPrayer?      = null,
+    val weeklyHistory   : List<WeekDay>     = emptyList(),
     val countdownText    : String           = "00:00:00",
     val error            : String?          = null,
     val userPreferences  : UserPreferences  = UserPreferences(),
-    val completedPrayers : Set<String>      = emptySet(),
-    val weeklyHistory   : List<WeekDay>     = emptyList(),
     val selectedDay      : WeekDay?         = null,
     val showDaySheet     : Boolean          = false
 )
@@ -58,6 +58,9 @@ class PrayerViewModel @Inject constructor(
         Prayer.FAJR, Prayer.DHUHR, Prayer.ASR, Prayer.MAGHRIB, Prayer.ISHA
     ).map { it.name }
 
+    val completedPrayersFlow: Flow<Set<String>> = prefsDataStore.completedPrayersToday
+    val weeklyHistoryFlow: Flow<List<WeekDay>> = prayerHistoryRepository.getLast7Days()
+
     init {
         viewModelScope.launch {
             prefsDataStore.userPreferences.collect { prefs ->
@@ -66,17 +69,11 @@ class PrayerViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            prefsDataStore.completedPrayersToday.collect { completed ->
-                _uiState.update { it.copy(completedPrayers = completed) }
-            }
-        }
-        viewModelScope.launch {
             prayerHistoryRepository.getLast7Days().collect { days ->
-                _uiState.update { state -> 
-                    val newSelectedDay = state.selectedDay?.let { currentSelected ->
-                        days.find { it.date == currentSelected.date }
-                    } ?: state.selectedDay
-                    state.copy(weeklyHistory = days, selectedDay = newSelectedDay) 
+                _uiState.update { state ->
+                    if (state.showDaySheet && state.selectedDay != null) {
+                        state.copy(selectedDay = days.find { it.date == state.selectedDay!!.date } ?: state.selectedDay)
+                    } else state
                 }
             }
         }

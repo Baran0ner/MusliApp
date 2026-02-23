@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -75,6 +76,7 @@ fun PrayerScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val strings = LocalStrings.current
+    val listState = rememberLazyListState()
 
     Box(
         modifier = Modifier
@@ -84,6 +86,7 @@ fun PrayerScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             // ── Sticky header ─────────────────────────────────────────────────
             PrayerHeader(
+                strings = strings,
                 onSettingsClick = { navController.navigate(Screen.Settings.route) },
                 onCalendarClick = { }
             )
@@ -121,7 +124,20 @@ fun PrayerScreen(
                     val displayTime = pt.timeFor(displayPrayer).cleanTime()
                     val countdownStr = "Sonraki vakte ${state.countdownText}"
 
+                    val completedMap = remember { mutableStateMapOf<String, Boolean>() }
+                    LaunchedEffect(Unit) {
+                        viewModel.completedPrayersFlow.collect { completed ->
+                            TRACKABLE_PRAYERS.forEach { p ->
+                                val inState = p.name in completed
+                                if ((completedMap[p.name] ?: false) != inState) {
+                                    completedMap[p.name] = inState
+                                }
+                            }
+                        }
+                    }
+
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -229,26 +245,27 @@ fun PrayerScreen(
                             }
                         }
 
-                        items(TRACKABLE_PRAYERS) { prayer ->
+                        items(
+                            items = TRACKABLE_PRAYERS,
+                            key = { it.name },
+                            contentType = { it.name }
+                        ) { prayer ->
+                            val isCompleted = completedMap[prayer.name] ?: false
                             PrayerTrackerRow(
                                 prayer = prayer,
                                 time = pt.timeFor(prayer).cleanTime(),
                                 isCurrent = prayer == currentPrayer,
-                                isCompleted = prayer.name in state.completedPrayers,
+                                isCompleted = isCompleted,
                                 strings = strings,
-                                onToggle = { viewModel.togglePrayerCompleted(prayer) }
+                                onToggle = {
+                                    completedMap[prayer.name] = !isCompleted
+                                    viewModel.togglePrayerCompleted(prayer)
+                                }
                             )
                         }
 
-                        if (state.weeklyHistory.isNotEmpty()) {
-                            item {
-                                Spacer(Modifier.height(8.dp))
-                                WeeklyStatusCard(
-                                    days = state.weeklyHistory,
-                                    onDayClick = viewModel::selectDay
-                                )
-                                Spacer(Modifier.height(16.dp))
-                            }
+                        item {
+                            WeeklyHistorySection(viewModel = viewModel)
                         }
                     }
                 }
@@ -282,6 +299,7 @@ fun PrayerScreen(
 
 @Composable
 private fun PrayerHeader(
+    strings: com.example.islam.core.i18n.AppStrings,
     onSettingsClick: () -> Unit,
     onCalendarClick: () -> Unit
 ) {
@@ -305,12 +323,12 @@ private fun PrayerHeader(
                 ) {
                     Image(
                         painter = painterResource(R.drawable.icon_ayarlar),
-                        contentDescription = "Ayarlar",
+                        contentDescription = strings.settings,
                         modifier = Modifier.size(28.dp)
                     )
                 }
                 Text(
-                    text = "Bugünkü Namazlar",
+                    text = strings.todaysPrayers,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Medium,
                     fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
@@ -446,6 +464,19 @@ private fun PrayerCheckbox(
                 modifier = Modifier.size(14.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun WeeklyHistorySection(viewModel: PrayerViewModel) {
+    val days by viewModel.weeklyHistoryFlow.collectAsState(initial = emptyList())
+    if (days.isNotEmpty()) {
+        Spacer(Modifier.height(8.dp))
+        WeeklyStatusCard(
+            days = days,
+            onDayClick = viewModel::selectDay
+        )
+        Spacer(Modifier.height(16.dp))
     }
 }
 
