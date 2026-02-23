@@ -1,16 +1,17 @@
 package com.example.islam.data.local.dao
 
 import android.content.Context
+import app.cash.turbine.test
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.islam.data.local.database.IslamDatabase
 import com.example.islam.data.local.entity.PrayerHistoryEntity
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -36,15 +37,15 @@ class PrayerHistoryDaoTest {
     }
 
     @Test
-    fun insertAndReadPrayerHistory() = runBlocking {
+    fun insertAndReadPrayerHistory() = runTest {
         // Arrange
         val entity = PrayerHistoryEntity(
             date = "2026-02-22",
-            fajrCompleted = true,
-            dhuhrCompleted = false,
-            asrCompleted = true,
-            maghribCompleted = false,
-            ishaCompleted = true
+            isFajrPrayed = true,
+            isDhuhrPrayed = false,
+            isAsrPrayed = true,
+            isMaghribPrayed = false,
+            isIshaPrayed = true
         )
 
         // Act
@@ -53,30 +54,35 @@ class PrayerHistoryDaoTest {
 
         // Assert
         assertNotNull(fetched)
-        assertEquals(true, fetched?.fajrCompleted)
-        assertEquals(false, fetched?.dhuhrCompleted)
+        assertEquals(true, fetched?.isFajrPrayed)
+        assertEquals(false, fetched?.isDhuhrPrayed)
     }
 
     @Test
-    fun getLast7DaysHistory_returnsOrderedList() = runBlocking {
+    fun getLast7DaysHistory_emitsOrderedUpdates() = runTest {
         // Arrange
-        val entity1 = PrayerHistoryEntity(date = "2026-02-20", fajrCompleted = true, dhuhrCompleted = true, asrCompleted = true, maghribCompleted = true, ishaCompleted = true)
-        val entity2 = PrayerHistoryEntity(date = "2026-02-22", fajrCompleted = false, dhuhrCompleted = false, asrCompleted = false, maghribCompleted = false, ishaCompleted = false)
-        val entity3 = PrayerHistoryEntity(date = "2026-02-21", fajrCompleted = true, dhuhrCompleted = false, asrCompleted = true, maghribCompleted = false, ishaCompleted = true)
+        val entity1 = PrayerHistoryEntity(date = "2026-02-20", isFajrPrayed = true, isDhuhrPrayed = true, isAsrPrayed = true, isMaghribPrayed = true, isIshaPrayed = true)
+        val entity2 = PrayerHistoryEntity(date = "2026-02-22", isFajrPrayed = false, isDhuhrPrayed = false, isAsrPrayed = false, isMaghribPrayed = false, isIshaPrayed = false)
+        val entity3 = PrayerHistoryEntity(date = "2026-02-21", isFajrPrayed = true, isDhuhrPrayed = false, isAsrPrayed = true, isMaghribPrayed = false, isIshaPrayed = true)
 
-        dao.insertOrUpdate(entity1)
-        dao.insertOrUpdate(entity2)
-        dao.insertOrUpdate(entity3)
+        dao.getLast7DaysHistory("2026-02-20", "2026-02-26").test {
+            val initial = awaitItem()
+            assertTrue(initial.isEmpty())
 
-        // Act
-        // Get records from "2026-02-20" onwards. Room will emit a flow, we capture the first emission.
-        val historyList = dao.getLast7DaysHistory("2026-02-20").first()
+            dao.insertOrUpdate(entity1)
+            dao.insertOrUpdate(entity2)
+            dao.insertOrUpdate(entity3)
 
-        // Assert
-        assertEquals(3, historyList.size)
-        // Should be ordered by date ASC
-        assertEquals("2026-02-20", historyList[0].date)
-        assertEquals("2026-02-21", historyList[1].date)
-        assertEquals("2026-02-22", historyList[2].date)
+            var latest = awaitItem()
+            while (latest.size < 3) {
+                latest = awaitItem()
+            }
+
+            assertEquals(3, latest.size)
+            assertEquals("2026-02-20", latest[0].date)
+            assertEquals("2026-02-21", latest[1].date)
+            assertEquals("2026-02-22", latest[2].date)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }

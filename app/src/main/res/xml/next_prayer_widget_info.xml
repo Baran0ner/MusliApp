@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    AppWidget Provider meta-data — NextPrayerWidget
+
+    minWidth/minHeight:  2x2 hücreye sığacak minimum boyut (110dp ≈ 2 grid hücresi)
+    targetCellWidth/Height: Android 12+ için ızgara tabanlı boyutlandırma (2x2)
+    updatePeriodMillis: 0 → sistem otomatik güncelleme yapmaz; WorkManager yönetir
+    previewLayout: Android 12+ için önizleme widget'ı (fallback: previewImage)
+    widgetCategory: home_screen — yalnızca ana ekranda gösterilir
+    widgetFeatures: reconfigurable değil, sabit içerik
+-->
+<appwidget-provider
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_description" />

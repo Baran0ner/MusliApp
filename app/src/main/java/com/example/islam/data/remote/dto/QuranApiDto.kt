@@ -37,10 +37,18 @@ data class SurahDetailDataDto(
     @SerializedName("ayahs") val ayahs: List<AyahDto>
 )
 
+/** Cüz yanıtında her ayette bulunan sure referansı */
+data class SurahRefDto(
+    @SerializedName("number") val number: Int,
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("englishName") val englishName: String? = null
+)
+
 data class AyahDto(
     @SerializedName("number") val number: Int,
     @SerializedName("text") val text: String,
     @SerializedName("numberInSurah") val numberInSurah: Int,
+    @SerializedName("surah") val surah: SurahRefDto? = null,
     @SerializedName("juz") val juz: Int?,
     @SerializedName("manzil") val manzil: Int?,
     @SerializedName("page") val page: Int?,

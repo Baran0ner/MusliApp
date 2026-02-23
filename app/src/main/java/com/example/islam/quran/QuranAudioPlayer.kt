@@ -78,6 +78,23 @@ class QuranAudioPlayer @Inject constructor(
         )
     }
 
+    /** Cüz için: her ayet (sureNo, ayetNo) listesi ile playlist hazırlar. */
+    fun preparePlaylistFromVerseList(verseList: List<Pair<Int, Int>>, displayName: String) {
+        exoPlayer?.stop()
+        exoPlayer?.clearMediaItems()
+        this.surahName = displayName
+        verseUrls = verseList.map { (surahNum, verseNum) ->
+            "$AUDIO_BASE${surahNum.toString().padStart(3, '0')}${verseNum.toString().padStart(3, '0')}.mp3"
+        }
+        _state.value = QuranAudioState(
+            currentSurahName = displayName,
+            currentVerseIndex = 0,
+            totalVerses = verseUrls.size,
+            positionMs = 0L,
+            durationMs = 0L
+        )
+    }
+
     fun playVerse(index: Int) {
         if (index < 0 || index >= verseUrls.size) return
         val url = verseUrls[index]
@@ -138,5 +155,10 @@ class QuranAudioPlayer @Inject constructor(
                 durationMs = p.duration.coerceAtLeast(0)
             )
         }
+    }
+
+    /** Sayfadan çıkıldığında sesi duraklatır; geri gelince kullanıcı play ile devam edebilir. */
+    fun pauseWhenLeavingScreen() {
+        exoPlayer?.pause()
     }
 }

@@ -19,6 +19,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -32,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.islam.core.i18n.LocalStrings
 import com.example.islam.core.navigation.Screen
 import com.example.islam.domain.model.JuzListModel
 import com.example.islam.domain.model.SurahListModel
@@ -56,10 +59,35 @@ fun QuranScreen(
     navController: NavController,
     viewModel: QuranViewModel = hiltViewModel()
 ) {
+    val strings = LocalStrings.current
     var selectedTab by remember { mutableStateOf(0) }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchExpanded by remember { mutableStateOf(false) }
+    var displayedCount by remember { mutableStateOf(10) }
+    val searchFocusRequester = remember { FocusRequester() }
     val uiState by viewModel.uiState.collectAsState()
     val lastRead by viewModel.lastRead.collectAsState()
     val bookmarkedSurahIds by viewModel.bookmarkedSurahIds.collectAsState()
+    val filteredSurahs = remember(uiState.surahs, searchQuery) {
+        if (searchQuery.isBlank()) uiState.surahs
+        else {
+            val q = searchQuery.lowercase().trim()
+            val trDisplay = com.example.islam.data.repository.StaticSurahData
+            uiState.surahs.filter { surah ->
+                surah.englishName.lowercase().contains(q) ||
+                    surah.englishNameTranslation.lowercase().contains(q) ||
+                    surah.arabicName.contains(searchQuery.trim()) ||
+                    (surah.turkishDisplayName?.lowercase()?.contains(q) == true) ||
+                    (trDisplay.getTurkishDisplayName(surah.number)?.lowercase()?.contains(q) == true) ||
+                    (surah.turkishNameTranslation?.lowercase()?.contains(q) == true) ||
+                    (trDisplay.getTurkishTranslation(surah.number)?.lowercase()?.contains(q) == true)
+            }
+        }
+    }
+    val displayedSurahs = remember(filteredSurahs, searchQuery, displayedCount) {
+        if (searchQuery.isNotBlank()) filteredSurahs else filteredSurahs.take(displayedCount)
+    }
+    val canLoadMore = searchQuery.isBlank() && filteredSurahs.size > displayedCount
 
     Box(
         modifier = Modifier
@@ -67,13 +95,6 @@ fun QuranScreen(
             .background(RefBackgroundDark)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // ── Header ───────────────────────────────────────────────────────
-            QuranHeader(
-                onMenuClick = { },
-                onSearchClick = { },
-                onNotificationsClick = { }
-            )
-
             when {
                 uiState.isLoading && uiState.surahs.isEmpty() -> {
                     Box(
@@ -99,7 +120,7 @@ fun QuranScreen(
                                 onClick = { viewModel.loadSurahs(refresh = true) },
                                 colors = ButtonDefaults.buttonColors(containerColor = RefPrimary),
                                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
-                            ) { Text("Tekrar Dene", color = RefBackgroundDark) }
+                            ) { Text(strings.retryButton, color = RefBackgroundDark) }
                         }
                     }
                 }
@@ -108,33 +129,82 @@ fun QuranScreen(
                         modifier = Modifier
                             .weight(1f)
                             .verticalScroll(rememberScrollState())
+                            .statusBarsPadding()
                             .padding(horizontal = 24.dp)
-                            .padding(top = 8.dp, bottom = 96.dp)
+                            .padding(top = 20.dp, bottom = 96.dp)
                     ) {
-                        // Greeting
+                        // Greeting — sayfa doğrudan buradan başlıyor
                         Text(
-                            "Assalamu'alaikum",
+                            "Esselamü Aleyküm",
                             fontSize = 14.sp,
                             color = RefTextGray400,
                             modifier = Modifier.padding(bottom = 2.dp)
                         )
-                        Text(
-                            "Tanvir Ahassan",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = RefTextWhite
-                        )
+                        // İsim ile aynı satırda sağda arama
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "Tanvir Ahassan",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = RefTextWhite
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(RefSurfaceCard)
+                                    .border(1.dp, RefBorderPrimary20, CircleShape)
+                                    .clickable { searchExpanded = !searchExpanded },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Search,
+                                    contentDescription = "Ara",
+                                    tint = RefPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                        if (searchExpanded) {
+                            Spacer(Modifier.height(12.dp))
+                            LaunchedEffect(Unit) {
+                                searchFocusRequester.requestFocus()
+                            }
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(searchFocusRequester),
+                                placeholder = { Text("Sure veya ayet ara…", color = RefTextGray500, fontSize = 14.sp) },
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = RefPrimary,
+                                    unfocusedBorderColor = RefBorderPrimary20,
+                                    cursorColor = RefPrimary,
+                                    focusedTextColor = RefTextWhite,
+                                    unfocusedTextColor = RefTextWhite
+                                )
+                            )
+                        }
                         Spacer(Modifier.height(24.dp))
 
                         // Last Read card
                         val bannerSurahId = lastRead?.surahId ?: 1
                         val bannerSurahName = lastRead?.surahName ?: "Al-Faatiha"
+                        val bannerDisplayName = uiState.surahs.find { it.number == bannerSurahId }?.turkishDisplayName
+                            ?: com.example.islam.data.repository.StaticSurahData.getTurkishDisplayName(bannerSurahId)
+                            ?: bannerSurahName
                         val bannerAyahNo = lastRead?.verseNumber ?: 1
                         val bannerProgress = lastRead?.let {
                             it.verseNumber.toFloat() / it.totalVerses.coerceAtLeast(1)
                         } ?: 0.25f
                         LastReadCard(
-                            surahName = bannerSurahName,
+                            surahName = bannerDisplayName,
                             ayahNo = bannerAyahNo,
                             progressFraction = bannerProgress,
                             onCardClick = {
@@ -156,7 +226,7 @@ fun QuranScreen(
                                 .padding(6.dp),
                             horizontalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
-                            listOf("Surah", "Juz", "Bilinen").forEachIndexed { index, label ->
+                            listOf("Sure", "Cüz", "Bilinen").forEachIndexed { index, label ->
                                 val selected = selectedTab == index
                                 Box(
                                     modifier = Modifier
@@ -182,13 +252,27 @@ fun QuranScreen(
                         Spacer(Modifier.height(24.dp))
 
                         when (selectedTab) {
-                            0 -> uiState.surahs.forEach { surah ->
-                                SurahRow(
-                                    surah = surah.copy(isBookmarked = surah.number in bookmarkedSurahIds),
-                                    onClick = { navController.navigate(Screen.SurahReader.route(surah.number, surah.name, false, 1)) },
-                                    onBookmarkClick = { viewModel.toggleBookmark(surah.number) },
-                                    modifier = Modifier.padding(bottom = 16.dp)
-                                )
+                            0 -> {
+                                displayedSurahs.forEach { surah ->
+                                    SurahRow(
+                                        surah = surah.copy(isBookmarked = surah.number in bookmarkedSurahIds),
+                                        onClick = { navController.navigate(Screen.SurahReader.route(surah.number, surah.name, false, 1)) },
+                                        onBookmarkClick = { viewModel.toggleBookmark(surah.number) },
+                                        modifier = Modifier.padding(bottom = 16.dp)
+                                    )
+                                }
+                                if (canLoadMore) {
+                                    Spacer(Modifier.height(8.dp))
+                                    OutlinedButton(
+                                        onClick = { displayedCount = (displayedCount + 10).coerceAtMost(filteredSurahs.size) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RefPrimary),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, RefBorderPrimary20)
+                                    ) {
+                                        Text("Daha fazla (${displayedSurahs.size}/${filteredSurahs.size})")
+                                    }
+                                    Spacer(Modifier.height(16.dp))
+                                }
                             }
                             1 -> uiState.juzs.forEach { juz ->
                                 JuzRow(
@@ -198,7 +282,7 @@ fun QuranScreen(
                                 )
                             }
                             2 -> {
-                                val bilinen = uiState.surahs.filter { it.number in bookmarkedSurahIds }
+                                val bilinen = filteredSurahs.filter { it.number in bookmarkedSurahIds }
                                 if (bilinen.isEmpty()) {
                                     Box(
                                         modifier = Modifier
@@ -227,95 +311,6 @@ fun QuranScreen(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun QuranHeader(
-    onMenuClick: () -> Unit,
-    onSearchClick: () -> Unit,
-    onNotificationsClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 20.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            IconButton(onClick = onMenuClick, modifier = Modifier.size(40.dp)) {
-                Icon(
-                    Icons.Outlined.Menu,
-                    contentDescription = "Menü",
-                    tint = RefTextGray400,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-            Text(
-                text = "Al-",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Normal,
-                color = RefTextWhite
-            )
-            Text(
-                text = "Quran",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Serif,
-                color = RefPrimary,
-                letterSpacing = 0.5.sp
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(RefSurfaceCard)
-                    .border(1.dp, RefBorderPrimary20, CircleShape)
-                    .clickable(onClick = onSearchClick),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Outlined.Search,
-                    contentDescription = "Ara",
-                    tint = RefPrimary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Box(modifier = Modifier.size(40.dp)) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(CircleShape)
-                        .background(RefSurfaceCard)
-                        .border(1.dp, RefBorderPrimary20, CircleShape)
-                        .clickable(onClick = onNotificationsClick),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Outlined.Notifications,
-                        contentDescription = "Bildirimler",
-                        tint = RefPrimary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .offset(x = 2.dp, y = 2.dp)
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(RefRed500)
-                        .border(1.dp, RefSurfaceCard, CircleShape)
-                )
             }
         }
     }
@@ -379,7 +374,7 @@ private fun LastReadCard(
                     modifier = Modifier.size(14.dp)
                 )
                 Text(
-                    "Last Read",
+                    "Son Okunan",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = RefTextGray400
@@ -394,7 +389,7 @@ private fun LastReadCard(
                 color = RefTextWhite
             )
             Text(
-                "Ayah No: $ayahNo",
+                "Ayet No: $ayahNo",
                 fontSize = 14.sp,
                 color = RefTextGray400,
                 modifier = Modifier.padding(top = 4.dp)
@@ -495,7 +490,7 @@ private fun SurahRow(
         SurahNumberDiamond(number = surah.number)
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = surah.englishName,
+                text = surah.turkishDisplayName ?: com.example.islam.data.repository.StaticSurahData.getTurkishDisplayName(surah.number) ?: surah.englishName,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = RefTextWhite
@@ -506,7 +501,9 @@ private fun SurahRow(
                 modifier = Modifier.padding(top = 4.dp)
             ) {
                 Text(
-                    text = surah.englishNameTranslation,
+                    text = surah.turkishNameTranslation
+                        ?: com.example.islam.data.repository.StaticSurahData.getTurkishTranslation(surah.number)
+                        ?: surah.englishNameTranslation,
                     fontSize = 12.sp,
                     color = RefTextGray400
                 )
@@ -517,7 +514,7 @@ private fun SurahRow(
                         .background(RefTextGray500)
                 )
                 Text(
-                    text = "${surah.numberOfAyahs} Verses",
+                    text = "${surah.numberOfAyahs} Ayet",
                     fontSize = 12.sp,
                     color = RefTextGray400
                 )

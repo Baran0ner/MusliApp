@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
+    alias(libs.plugins.androidx.baselineprofile)
 }
 
 android {
@@ -23,6 +26,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -40,6 +44,12 @@ android {
         compose = true
         buildConfig = true
     }
+}
+
+baselineProfile {
+    dexLayoutOptimization = true
+    automaticGenerationDuringBuild = false
+    saveInSrc = true
 }
 
 dependencies {
@@ -101,6 +111,21 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.2.1")
     implementation("androidx.media3:media3-ui:1.2.1")
 
+    // Glance AppWidget — Ana ekran widget
+    implementation(libs.glance.appwidget)
+    implementation(libs.glance.material3)
+
+    // Firebase — BOM ile tek noktadan versiyon yönetimi
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.messaging)
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.play.services.auth)
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":benchmark"))
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
@@ -110,8 +135,38 @@ dependencies {
     testImplementation(libs.room.testing)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.coroutines.test)
+    androidTestImplementation(libs.turbine)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+}
+
+tasks.register("verifyBaselineProfile") {
+    group = "verification"
+    description = "Baseline profile dosyasının üretildiğini ve boş olmadığını doğrular."
+    dependsOn("generateBaselineProfile")
+
+    doLast {
+        val candidateFiles = mutableSetOf<java.io.File>()
+        candidateFiles += fileTree(projectDir) {
+            include("src/**/baselineProfiles/*.txt")
+            include("src/**/generated/baselineProfiles/*.txt")
+            include("**/baseline-prof.txt")
+        }.files
+        candidateFiles += fileTree(layout.buildDirectory.get().asFile) {
+            include("**/baselineProfiles/*.txt")
+            include("**/baseline-prof.txt")
+        }.files
+
+        val profileFile = candidateFiles.firstOrNull { it.exists() && it.length() > 0L }
+        if (profileFile == null) {
+            throw GradleException(
+                "Baseline profile bulunamadı veya boş. Önce :app:generateBaselineProfile çalıştırın."
+            )
+        }
+
+        println("Baseline profile doğrulandı: ${profileFile.absolutePath}")
+    }
 }

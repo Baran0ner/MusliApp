@@ -54,20 +54,26 @@ class AlarmScheduler @Inject constructor(
         )
 
         // Android 12+ (API 31): check permission before scheduling exact alarm.
-        // If not granted, fall back to a 60-second inexact window (setWindow).
+        // If not granted, fall back to Doze-aware inexact alarm.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (alarmManager.canScheduleExactAlarms()) {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    triggerCal.timeInMillis,
-                    pendingIntent
-                )
+                runCatching {
+                    alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerCal.timeInMillis,
+                        pendingIntent
+                    )
+                }.onFailure {
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerCal.timeInMillis,
+                        pendingIntent
+                    )
+                }
             } else {
-                // Fallback: 60-second window alarm — still fires close to prayer time
-                alarmManager.setWindow(
+                alarmManager.setAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
                     triggerCal.timeInMillis,
-                    60_000L,
                     pendingIntent
                 )
             }

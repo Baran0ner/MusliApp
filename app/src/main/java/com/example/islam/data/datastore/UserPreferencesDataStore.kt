@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import java.io.IOException
+import java.time.DayOfWeek
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,6 +21,11 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 class UserPreferencesDataStore @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    companion object {
+        private val MULTI_SPACE_REGEX = Regex("\\s+")
+        private val DISPLAY_NAME_REGEX = Regex("^[\\p{L}' ]+$")
+    }
+
     private object Keys {
         val CITY                = stringPreferencesKey("city")
         val COUNTRY             = stringPreferencesKey("country")
@@ -31,13 +38,23 @@ class UserPreferencesDataStore @Inject constructor(
         val APP_THEME           = intPreferencesKey("app_theme")
         val SCHOOL              = intPreferencesKey("school")       // 0=Şafii, 1=Hanefi
         val LANGUAGE            = stringPreferencesKey("language")  // "tr" | "en" | "ar"
+        val DISPLAY_NAME        = stringPreferencesKey("display_name")
+        val PERSONALIZED_ADDRESSING = booleanPreferencesKey("personalized_addressing")
+        val PERSONALIZED_NOTIFICATIONS = booleanPreferencesKey("personalized_notifications")
+        val NAME_PROMPT_DISMISSED = booleanPreferencesKey("name_prompt_dismissed")
         val ONBOARDING_DONE     = booleanPreferencesKey("onboarding_done")
         // Namaz takibi
         val PRAYER_STREAK       = intPreferencesKey("prayer_streak")
         val STREAK_LAST_DATE    = stringPreferencesKey("streak_last_date")
         val COMPLETED_PRAYERS   = stringPreferencesKey("completed_prayers_today") // "date|prayer1,prayer2"
+        // Home streak kartı (haftalık gün dolumu)
+        val HOME_STREAK_WEEK_START = stringPreferencesKey("home_streak_week_start") // ISO date, hafta başlangıcı (Pazartesi)
+        val HOME_STREAK_WEEK_MASK  = intPreferencesKey("home_streak_week_mask")     // 7-bit maske: Mon..Sun
+        val HOME_STREAK_LAST_MARK  = stringPreferencesKey("home_streak_last_mark")
         // Hicri takvim sapması (-2..+2)
         val HIJRI_OFFSET        = intPreferencesKey("hijri_offset")
+        // Günlük namaz hedefi (1..5)
+        val DAILY_PRAYER_GOAL   = intPreferencesKey("daily_prayer_goal")
         // Namaz bildirim türleri: "fajr:0,dhuhr:0,asr:0,maghrib:0,isha:0"
         val PRAYER_NOTIF_TYPES  = stringPreferencesKey("prayer_notif_types")
         // Son okunan sure (Kuran Last Read)
@@ -66,8 +83,13 @@ class UserPreferencesDataStore @Inject constructor(
                 school               = prefs[Keys.SCHOOL] ?: 0,
                 language             = prefs[Keys.LANGUAGE] ?: "tr",
                 hijriOffset          = prefs[Keys.HIJRI_OFFSET] ?: 0,
+                dailyPrayerGoal      = (prefs[Keys.DAILY_PRAYER_GOAL] ?: 5).coerceIn(1, 5),
                 prayerNotifTypes     = prefs[Keys.PRAYER_NOTIF_TYPES]
-                    ?: "fajr:0,dhuhr:0,asr:0,maghrib:0,isha:0"
+                    ?: "fajr:0,dhuhr:0,asr:0,maghrib:0,isha:0",
+                displayName          = prefs[Keys.DISPLAY_NAME] ?: "",
+                personalizedAddressingEnabled = prefs[Keys.PERSONALIZED_ADDRESSING] ?: true,
+                personalizedNotificationsEnabled = prefs[Keys.PERSONALIZED_NOTIFICATIONS] ?: true,
+                namePromptDismissed  = prefs[Keys.NAME_PROMPT_DISMISSED] ?: false
             )
         }
 
@@ -114,9 +136,65 @@ class UserPreferencesDataStore @Inject constructor(
         context.dataStore.edit { prefs -> prefs[Keys.LANGUAGE] = language }
     }
 
+    suspend fun updateDisplayName(name: String) {
+        val sanitized = sanitizeDisplayName(name) ?: return
+        context.dataStore.edit { prefs -> prefs[Keys.DISPLAY_NAME] = sanitized }
+    }
+
+    suspend fun clearDisplayName() {
+        context.dataStore.edit { prefs -> prefs[Keys.DISPLAY_NAME] = "" }
+    }
+
+    suspend fun setPersonalizedAddressingEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.PERSONALIZED_ADDRESSING] = enabled }
+    }
+
+    suspend fun setPersonalizedNotificationsEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.PERSONALIZED_NOTIFICATIONS] = enabled }
+    }
+
+    suspend fun setNamePromptDismissed(dismissed: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.NAME_PROMPT_DISMISSED] = dismissed }
+    }
+
+    suspend fun seedDisplayNameIfEmpty(candidate: String?) {
+        val sanitized = sanitizeDisplayName(candidate ?: return) ?: return
+        context.dataStore.edit { prefs ->
+            if ((prefs[Keys.DISPLAY_NAME] ?: "").isBlank()) {
+                prefs[Keys.DISPLAY_NAME] = sanitized
+            }
+        }
+    }
+
     suspend fun updateHijriOffset(offset: Int) {
         val clamped = offset.coerceIn(-2, 2)
         context.dataStore.edit { prefs -> prefs[Keys.HIJRI_OFFSET] = clamped }
+    }
+
+    // ── Günlük Namaz Hedefi ────────────────────────────────────────────────
+
+    suspend fun updateDailyPrayerGoal(goal: Int) {
+        val clamped = goal.coerceIn(1, 5)
+        val today = java.time.LocalDate.now().toString()
+        val yesterday = java.time.LocalDate.now().minusDays(1).toString()
+        context.dataStore.edit { prefs ->
+            prefs[Keys.DAILY_PRAYER_GOAL] = clamped
+
+            // Hedef düşürüldüyse ve bugün zaten tamamlandıysa, streak'i güncelle
+            val raw = prefs[Keys.COMPLETED_PRAYERS] ?: ""
+            val completedCount = if (raw.startsWith(today)) {
+                raw.substringAfter("|").split(",").filter { it.isNotBlank() }.size
+            } else 0
+
+            if (completedCount >= clamped) {
+                val lastDate = prefs[Keys.STREAK_LAST_DATE] ?: ""
+                if (lastDate != today) {
+                    val currentStreak = prefs[Keys.PRAYER_STREAK] ?: 0
+                    prefs[Keys.PRAYER_STREAK] = if (lastDate == yesterday) currentStreak + 1 else 1
+                    prefs[Keys.STREAK_LAST_DATE] = today
+                }
+            }
+        }
     }
 
     /** Tek bir namaz vakti için bildirim türünü günceller.
@@ -144,8 +222,11 @@ class UserPreferencesDataStore @Inject constructor(
         .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
         .map { prefs -> prefs[Keys.ONBOARDING_DONE] ?: false }
 
-    suspend fun setOnboardingCompleted() {
-        context.dataStore.edit { prefs -> prefs[Keys.ONBOARDING_DONE] = true }
+    suspend fun setOnboardingCompleted(suppressNamePrompt: Boolean = false) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.ONBOARDING_DONE] = true
+            if (suppressNamePrompt) prefs[Keys.NAME_PROMPT_DISMISSED] = true
+        }
     }
 
     suspend fun resetOnboarding() {
@@ -217,7 +298,17 @@ class UserPreferencesDataStore @Inject constructor(
         .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
         .map { prefs -> prefs[Keys.PRAYER_STREAK] ?: 0 }
 
-    suspend fun togglePrayerCompleted(prayerId: String, allPrayerIds: List<String>) {
+    /** Home streak kartı haftalık maskesi (Mon..Sun => bit 0..6). */
+    val homeStreakWeekMask: Flow<Int> = context.dataStore.data
+        .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
+        .map { prefs ->
+            val today = LocalDate.now()
+            val currentWeekStart = homeWeekStart(today).toString()
+            val storedWeekStart = prefs[Keys.HOME_STREAK_WEEK_START] ?: ""
+            if (storedWeekStart == currentWeekStart) (prefs[Keys.HOME_STREAK_WEEK_MASK] ?: 0) else 0
+        }
+
+    suspend fun togglePrayerCompleted(prayerId: String) {
         val today = java.time.LocalDate.now().toString()
         context.dataStore.edit { prefs ->
             val raw = prefs[Keys.COMPLETED_PRAYERS] ?: ""
@@ -230,8 +321,9 @@ class UserPreferencesDataStore @Inject constructor(
 
             prefs[Keys.COMPLETED_PRAYERS] = "$today|${currentSet.joinToString(",")}"
 
-            // Eğer tüm namazlar tamamlandıysa streak artır
-            if (currentSet.containsAll(allPrayerIds)) {
+            // Hedef tamamlandıysa streak artır
+            val goal = (prefs[Keys.DAILY_PRAYER_GOAL] ?: 5).coerceIn(1, 5)
+            if (currentSet.size >= goal) {
                 val lastDate = prefs[Keys.STREAK_LAST_DATE] ?: ""
                 val yesterday = java.time.LocalDate.now().minusDays(1).toString()
                 val currentStreak = prefs[Keys.PRAYER_STREAK] ?: 0
@@ -241,5 +333,64 @@ class UserPreferencesDataStore @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Gün değiştiyse ve son hedef tarihi dün değilse streak'i sıfırlar.
+     * (Duolingo mantığı: yeni gün başında streak korunur; dün de yoksa kırılır.)
+     */
+    suspend fun ensureStreakUpToDate() {
+        val today = java.time.LocalDate.now().toString()
+        val yesterday = java.time.LocalDate.now().minusDays(1).toString()
+        context.dataStore.edit { prefs ->
+            val lastDate = prefs[Keys.STREAK_LAST_DATE] ?: ""
+            if (lastDate.isNotBlank() && lastDate != today && lastDate != yesterday) {
+                prefs[Keys.PRAYER_STREAK] = 0
+            }
+        }
+    }
+
+    /**
+     * Home ekranına her girişte bugünün gününü haftalık streak satırında işaretler.
+     * Aynı gün içinde tekrar girişte tekrar yazmaz.
+     */
+    suspend fun markHomeEntryForToday() {
+        val today = LocalDate.now()
+        val todayIso = today.toString()
+        val currentWeekStart = homeWeekStart(today).toString()
+        val dayIndex = homeWeekDayIndex(today.dayOfWeek)
+        context.dataStore.edit { prefs ->
+            val alreadyMarkedToday = (prefs[Keys.HOME_STREAK_LAST_MARK] ?: "") == todayIso
+            val storedWeekStart = prefs[Keys.HOME_STREAK_WEEK_START] ?: ""
+            var mask = if (storedWeekStart == currentWeekStart) {
+                prefs[Keys.HOME_STREAK_WEEK_MASK] ?: 0
+            } else 0
+
+            if (!alreadyMarkedToday) {
+                mask = mask or (1 shl dayIndex)
+                prefs[Keys.HOME_STREAK_LAST_MARK] = todayIso
+            }
+
+            prefs[Keys.HOME_STREAK_WEEK_START] = currentWeekStart
+            prefs[Keys.HOME_STREAK_WEEK_MASK] = mask
+        }
+    }
+
+    private fun homeWeekStart(date: LocalDate): LocalDate {
+        val backDays = (date.dayOfWeek.value - DayOfWeek.MONDAY.value).toLong() // Mon=1 ... Sun=7
+        return date.minusDays(backDays)
+    }
+
+    private fun homeWeekDayIndex(dayOfWeek: DayOfWeek): Int = dayOfWeek.value - DayOfWeek.MONDAY.value
+
+    private fun sanitizeDisplayName(raw: String): String? {
+        val normalized = raw
+            .replace('’', '\'')
+            .trim()
+            .replace(MULTI_SPACE_REGEX, " ")
+
+        if (normalized.length !in 2..24) return null
+        if (!DISPLAY_NAME_REGEX.matches(normalized)) return null
+        return normalized
     }
 }

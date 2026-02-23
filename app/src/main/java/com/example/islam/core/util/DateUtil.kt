@@ -41,6 +41,12 @@ object DateUtil {
         return "%02d:%02d:%02d".format(hours, minutes, seconds)
     }
 
+    /** Returns current device time in 24-hour "HH:mm" format */
+    fun formatTimeNow(date: Date = Date()): String {
+        val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+        return sdf.format(date)
+    }
+
     /** Formats a Date to Turkish long format: "19 Şubat 2026, Perşembe" */
     fun formatDateLong(date: Date = Date()): String {
         val sdf = SimpleDateFormat("d MMMM yyyy, EEEE", turkishLocale)

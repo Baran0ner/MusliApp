@@ -12,7 +12,12 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.example.islam.MainActivity
 import com.example.islam.R
+import com.example.islam.data.datastore.UserPreferencesDataStore
 import com.example.islam.domain.model.Prayer
+import com.example.islam.notification.EzanWakeLockManager
+import com.example.islam.notification.NotificationTextFormatter
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 /**
  * Ezan vaktinde çalışan Foreground Service.
@@ -28,6 +33,7 @@ import com.example.islam.domain.model.Prayer
 class EzanForegroundService : Service() {
 
     private var mediaPlayer: MediaPlayer? = null
+    private var wakeLockToken: String? = null
 
     // ─────────────────────────────────────────────────────────────────────────
     // Lifecycle
@@ -41,6 +47,8 @@ class EzanForegroundService : Service() {
                 val prayerName = intent.getStringExtra(EXTRA_PRAYER_NAME) ?: return START_NOT_STICKY
                 val prayerTime = intent.getStringExtra(EXTRA_PRAYER_TIME) ?: ""
                 val channelId  = intent.getStringExtra(EXTRA_CHANNEL_ID)  ?: Prayer.NOTIFICATION_CHANNEL_ID
+                releaseWakeLock()
+                wakeLockToken = intent.getStringExtra(EXTRA_WAKELOCK_TOKEN)
                 startEzan(prayerName, prayerTime, channelId)
             }
             ACTION_STOP -> stopEzan()
@@ -50,6 +58,7 @@ class EzanForegroundService : Service() {
 
     override fun onDestroy() {
         releasePlayer()
+        releaseWakeLock()
         super.onDestroy()
     }
 
@@ -100,6 +109,7 @@ class EzanForegroundService : Service() {
 
     private fun stopEzan() {
         releasePlayer()
+        releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -108,6 +118,11 @@ class EzanForegroundService : Service() {
         mediaPlayer?.runCatching { stop() }
         mediaPlayer?.release()
         mediaPlayer = null
+    }
+
+    private fun releaseWakeLock() {
+        EzanWakeLockManager.release(wakeLockToken)
+        wakeLockToken = null
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -123,6 +138,11 @@ class EzanForegroundService : Service() {
         prayerTime: String,
         channelId: String
     ): android.app.Notification {
+        val personalization = runCatching {
+            runBlocking { UserPreferencesDataStore(applicationContext).userPreferences.first() }
+        }.getOrNull()
+        val displayName = personalization?.displayName
+        val personalizedEnabled = personalization?.personalizedNotificationsEnabled ?: true
 
         val stopPendingIntent = PendingIntent.getService(
             this,
@@ -146,15 +166,40 @@ class EzanForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val fullScreenIntent = PendingIntent.getActivity(
+            this,
+            REQUEST_FULLSCREEN,
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         return NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("$prayerName Vakti \uD83D\uDD54")          // 🔔
-            .setContentText("$prayerName namazının vakti geldi: $prayerTime")
+            .setContentTitle(
+                NotificationTextFormatter.prayerTitle(
+                    prayerName = prayerName,
+                    displayName = displayName,
+                    personalizedNotificationsEnabled = personalizedEnabled
+                ) + " \uD83D\uDD54"
+            )
+            .setContentText(
+                NotificationTextFormatter.prayerBody(
+                    prayerName = prayerName,
+                    prayerTime = prayerTime,
+                    displayName = displayName,
+                    personalizedNotificationsEnabled = personalizedEnabled
+                )
+            )
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setAutoCancel(false)
+            .setFullScreenIntent(fullScreenIntent, true)
             .setContentIntent(openAndStopIntent)
             .addAction(
                 android.R.drawable.ic_media_pause,
@@ -175,22 +220,26 @@ class EzanForegroundService : Service() {
         const val EXTRA_PRAYER_NAME = "extra_prayer_name"
         const val EXTRA_PRAYER_TIME = "extra_prayer_time"
         const val EXTRA_CHANNEL_ID  = "extra_channel_id"
+        const val EXTRA_WAKELOCK_TOKEN = "extra_wakelock_token"
 
         private const val NOTIFICATION_ID = 9001
         private const val REQUEST_STOP    = 1
         private const val REQUEST_OPEN    = 2
+        private const val REQUEST_FULLSCREEN = 3
 
         /** [PrayerAlarmReceiver]'dan çağrılmak üzere hazır Intent factory. */
         fun buildStartIntent(
             context: Context,
             prayerName: String,
             prayerTime: String,
-            channelId: String
+            channelId: String,
+            wakeLockToken: String?
         ): Intent = Intent(context, EzanForegroundService::class.java).apply {
             action = ACTION_START
             putExtra(EXTRA_PRAYER_NAME, prayerName)
             putExtra(EXTRA_PRAYER_TIME, prayerTime)
             putExtra(EXTRA_CHANNEL_ID,  channelId)
+            putExtra(EXTRA_WAKELOCK_TOKEN, wakeLockToken)
         }
     }
 }

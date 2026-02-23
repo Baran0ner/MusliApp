@@ -35,6 +35,8 @@ fun PrayerTime.toEntity(): PrayerTimeEntity {
         date = date,
         month = month,
         year = year,
+        method = 13,
+        school = 0,
         imsak = imsak,
         fajr = fajr,
         sunrise = sunrise,
@@ -50,12 +52,21 @@ fun PrayerTime.toEntity(): PrayerTimeEntity {
 
 // ── DTO → Entity (tekil gün) ─────────────────────────────────────────────────
 
-fun PrayerTimeResponse.toEntity(city: String, country: String): PrayerTimeEntity =
-    data.toEntity(city, country)
+fun PrayerTimeResponse.toEntity(
+    city: String,
+    country: String,
+    method: Int = 13,
+    school: Int = 0
+): PrayerTimeEntity = data.toEntity(city, country, method, school)
 
 // ── DTO → Entity (PrayerData — hem tekil hem de takvim yanıtı için) ──────────
 
-fun PrayerData.toEntity(city: String, country: String): PrayerTimeEntity {
+fun PrayerData.toEntity(
+    city: String,
+    country: String,
+    method: Int = 13,
+    school: Int = 0
+): PrayerTimeEntity {
     val t = timings
     val hijri = date.hijri
     val greg  = date.gregorian
@@ -63,6 +74,8 @@ fun PrayerData.toEntity(city: String, country: String): PrayerTimeEntity {
         date      = greg.date,                              // "19-02-2026"
         month     = greg.month.number,                     // 2
         year      = greg.year.toIntOrNull() ?: 0,          // 2026
+        method    = method,
+        school    = school,
         imsak     = t.imsak.cleanTime(),
         fajr      = t.fajr.cleanTime(),
         sunrise   = t.sunrise.cleanTime(),

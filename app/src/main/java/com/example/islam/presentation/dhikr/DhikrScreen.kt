@@ -1,5 +1,10 @@
 package com.example.islam.presentation.dhikr
 
+import android.content.Context
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -13,10 +18,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.*
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.*
@@ -30,12 +38,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.islam.core.i18n.LocalStrings
 import com.example.islam.domain.model.Dhikr
+import com.example.islam.domain.model.DhikrDay
+import com.example.islam.domain.model.DhikrRecord
+import java.text.SimpleDateFormat
+import java.util.*
 
 // ─── Renkler ──────────────────────────────────────────────────────────────────
 private val BgDeep     = Color(0xFF091811)
@@ -49,10 +64,21 @@ private val ChipBg     = Color(0xFF132B1A)
 private val ChipActive = Color(0xFF1E4A2E)
 
 // ─── Ekran ────────────────────────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DhikrScreen(viewModel: DhikrViewModel = hiltViewModel()) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val dhikr = state.selectedDhikr
+    val strings = LocalStrings.current
+    val (tickHaptic, completeHaptic) = rememberDhikrHaptics()
+    var previousCycleCount by remember { mutableIntStateOf(state.cycleCount) }
+
+    LaunchedEffect(state.cycleCount) {
+        if (state.cycleCount > previousCycleCount) {
+            completeHaptic()
+        }
+        previousCycleCount = state.cycleCount
+    }
 
     Box(
         modifier = Modifier
@@ -64,7 +90,9 @@ fun DhikrScreen(viewModel: DhikrViewModel = hiltViewModel()) {
             )
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Başlık
@@ -117,7 +145,7 @@ fun DhikrScreen(viewModel: DhikrViewModel = hiltViewModel()) {
             // Devir sayısı
             if (state.cycleCount > 0) {
                 Text(
-                    text     = "${state.cycleCount}. devir tamamlandı",
+                    text     = strings.dhikrCycleCompletedFormat.format(state.cycleCount),
                     fontSize = 13.sp,
                     color    = Gold.copy(alpha = 0.7f),
                     fontWeight = FontWeight.Medium
@@ -130,33 +158,139 @@ fun DhikrScreen(viewModel: DhikrViewModel = hiltViewModel()) {
                 count       = dhikr?.count ?: 0,
                 target      = dhikr?.targetCount ?: 33,
                 celebrating = state.isCelebrating,
-                onClick     = { if (dhikr != null) viewModel.increment() }
+                onClick     = {
+                    if (dhikr != null) {
+                        tickHaptic()
+                        viewModel.increment()
+                    }
+                }
             )
 
             Spacer(Modifier.height(24.dp))
 
-            // Sıfırla butonu
+            // Sıfırla + Kaydet butonları
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.padding(bottom = 32.dp)
+                modifier = Modifier.padding(bottom = 16.dp)
             ) {
                 OutlinedButton(
                     onClick = viewModel::reset,
                     border  = androidx.compose.foundation.BorderStroke(1.dp, GoldDim),
                     colors  = ButtonDefaults.outlinedButtonColors(contentColor = Gold),
-                    shape   = RoundedCornerShape(8.dp) // ADM secondary button radius
+                    shape   = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
                         imageVector        = Icons.Outlined.Refresh,
-                        contentDescription = "Sıfırla",
+                        contentDescription = strings.reset,
                         modifier           = Modifier.size(16.dp)
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text("Sıfırla", fontSize = 14.sp)
+                    Text(strings.reset, fontSize = 14.sp)
                 }
+                OutlinedButton(
+                    onClick = viewModel::saveCurrent,
+                    border  = androidx.compose.foundation.BorderStroke(1.dp, GoldDim),
+                    colors  = ButtonDefaults.outlinedButtonColors(contentColor = Gold),
+                    shape   = RoundedCornerShape(8.dp)
+                ) {
+                    Text(strings.saveDhikr, fontSize = 14.sp)
+                }
+            }
+
+            if (state.weeklyDays.isNotEmpty()) {
+                DhikrWeeklyCard(
+                    days = state.weeklyDays,
+                    onDayClick = viewModel::selectDay
+                )
+                Spacer(Modifier.height(32.dp))
+            }
+        }
+
+        if (state.showDaySheet && state.selectedDay != null) {
+            androidx.compose.material3.ModalBottomSheet(
+                onDismissRequest = viewModel::dismissDaySheet,
+                containerColor = ChipBg,
+                dragHandle = {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 12.dp, bottom = 8.dp)
+                            .size(width = 36.dp, height = 4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(Gold.copy(alpha = 0.4f))
+                    )
+                }
+            ) {
+                DhikrDaySheetContent(
+                    day = state.selectedDay!!,
+                    records = state.dayDetailRecords,
+                    onDismiss = viewModel::dismissDaySheet
+                )
             }
         }
     }
+}
+
+@Composable
+private fun rememberDhikrHaptics(): Pair<() -> Unit, () -> Unit> {
+    val context = LocalContext.current
+    val vibrator = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+    }
+
+    val tick: () -> Unit = tick@{
+        val deviceVibrator = vibrator ?: return@tick
+        if (!deviceVibrator.hasVibrator()) return@tick
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
+                deviceVibrator.vibrate(
+                    VibrationEffect.startComposition()
+                        .addPrimitive(VibrationEffect.Composition.PRIMITIVE_TICK, 0.45f)
+                        .compose()
+                )
+            }
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
+                deviceVibrator.vibrate(
+                    VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
+                )
+            }
+            else -> {
+                deviceVibrator.vibrate(
+                    VibrationEffect.createOneShot(12L, 90)
+                )
+            }
+        }
+    }
+
+    val complete: () -> Unit = complete@{
+        val deviceVibrator = vibrator ?: return@complete
+        if (!deviceVibrator.hasVibrator()) return@complete
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
+                deviceVibrator.vibrate(
+                    VibrationEffect.startComposition()
+                        .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1f)
+                        .addPrimitive(VibrationEffect.Composition.PRIMITIVE_QUICK_RISE, 0.75f)
+                        .compose()
+                )
+            }
+            else -> {
+                deviceVibrator.vibrate(
+                    VibrationEffect.createWaveform(
+                        longArrayOf(0L, 30L, 30L, 40L),
+                        intArrayOf(0, 170, 0, 210),
+                        -1
+                    )
+                )
+            }
+        }
+    }
+
+    return tick to complete
 }
 
 // ─── Başlık ───────────────────────────────────────────────────────────────────
@@ -345,6 +479,175 @@ private fun TasbihCounter(
                     color     = if (celebrating) Color(0xFFFFD700) else Gold,
                     textAlign = TextAlign.Center
                 )
+            }
+        }
+    }
+}
+
+// ─── Haftalık tespih durumu ───────────────────────────────────────────────────
+@Composable
+private fun DhikrWeeklyCard(
+    days: List<DhikrDay>,
+    onDayClick: (DhikrDay) -> Unit
+) {
+    val strings = LocalStrings.current
+    val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    val daysWithActivity = days.count { it.records.isNotEmpty() }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(ChipBg)
+            .border(1.dp, GoldFaint, RoundedCornerShape(20.dp))
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = strings.dhikrWeeklyTitle,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextMuted
+            )
+            Text(
+                text = strings.dhikrWeeklySummaryFormat.format(daysWithActivity),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Gold
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            days.forEach { day ->
+                DhikrDayItem(
+                    day = day,
+                    isToday = day.date == todayStr,
+                    onClick = { onDayClick(day) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DhikrDayItem(
+    day: DhikrDay,
+    isToday: Boolean,
+    onClick: () -> Unit
+) {
+    val total = day.totalCount
+    val hasActivity = day.records.isNotEmpty()
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onClick() }
+            .padding(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(if (hasActivity) Gold.copy(alpha = 0.2f) else BgDeep),
+                contentAlignment = Alignment.Center
+        ) {
+            if (hasActivity) {
+                Text(
+                    text = "📿",
+                    fontSize = 14.sp
+                )
+            }
+        }
+        Text(
+            text = day.shortName,
+            fontSize = 10.sp,
+            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
+            color = if (isToday) Gold else TextMuted
+        )
+        if (hasActivity) {
+            Text(
+                text = "${total}",
+                fontSize = 9.sp,
+                color = Gold.copy(alpha = 0.8f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun DhikrDaySheetContent(
+    day: DhikrDay,
+    records: List<DhikrRecord>,
+    onDismiss: () -> Unit
+) {
+    val strings = LocalStrings.current
+    val displayDate = remember(day.date) {
+        try {
+            val parsed = SimpleDateFormat("yyyy-MM-dd", Locale("tr")).parse(day.date)
+            SimpleDateFormat("d MMMM yyyy, EEEE", Locale("tr")).format(parsed!!)
+        } catch (e: Exception) {
+            day.date
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 32.dp)
+    ) {
+        Text(
+            text = displayDate,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Gold,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        if (records.isEmpty()) {
+            Text(
+                text = strings.noDhikrToday,
+                fontSize = 14.sp,
+                color = TextMuted,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+        } else {
+            val aggregated = remember(records) {
+                records.groupBy { it.dhikrName }.map { (name, list) ->
+                    name to list.sumOf { it.count }
+                }
+            }
+            aggregated.forEach { (name, total) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = name,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextWhite
+                    )
+                    Text(
+                        text = "$total adet",
+                        fontSize = 14.sp,
+                        color = Gold
+                    )
+                }
             }
         }
     }

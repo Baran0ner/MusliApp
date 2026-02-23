@@ -22,14 +22,20 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         val prayerName = intent.getStringExtra(EXTRA_PRAYER_NAME) ?: return
         val prayerTime = intent.getStringExtra(EXTRA_PRAYER_TIME) ?: ""
         val channelId  = intent.getStringExtra(EXTRA_CHANNEL_ID)  ?: Prayer.NOTIFICATION_CHANNEL_ID
+        val wakeLockToken = EzanWakeLockManager.acquire(context, timeoutMs = 5_000L)
 
         val serviceIntent = EzanForegroundService.buildStartIntent(
             context     = context,
             prayerName  = prayerName,
             prayerTime  = prayerTime,
-            channelId   = channelId
+            channelId   = channelId,
+            wakeLockToken = wakeLockToken
         )
-        ContextCompat.startForegroundService(context, serviceIntent)
+        runCatching {
+            ContextCompat.startForegroundService(context, serviceIntent)
+        }.onFailure {
+            EzanWakeLockManager.release(wakeLockToken)
+        }
     }
 
     companion object {

@@ -140,6 +140,10 @@ class SurahReaderViewModel @Inject constructor(
                             isLoading = false,
                             error = null
                         )
+                        if (verses.isNotEmpty()) {
+                            val verseList = verses.map { (it.surahNumber ?: 1) to it.numberInSurah }
+                            audioPlayer.preparePlaylistFromVerseList(verseList, "Cüz $juzNum")
+                        }
                     }
                 }
                 .onFailure { e ->
@@ -178,6 +182,7 @@ class SurahReaderViewModel @Inject constructor(
     }
 
     override fun onCleared() {
-        // Singleton player'ı release etmiyoruz; uygulama genelinde çalışmaya devam etsin
+        // Sayfadan çıkıldığında sesi durdur; geri gelince kullanıcı play ile kaldığı yerden devam edebilir
+        audioPlayer.pauseWhenLeavingScreen()
     }
 }

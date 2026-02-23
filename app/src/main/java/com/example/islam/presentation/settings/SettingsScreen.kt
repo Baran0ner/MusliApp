@@ -1,6 +1,7 @@
 package com.example.islam.presentation.settings
 
 import android.Manifest
+import android.os.Bundle
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,8 +28,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
 import com.example.islam.core.i18n.LocalStrings
+import com.example.islam.core.navigation.Screen
+import com.example.islam.presentation.auth.GoogleAuthViewModel
 import com.example.islam.core.util.BatteryOptimizationHelper
+import com.google.firebase.analytics.FirebaseAnalytics
 import com.example.islam.ui.theme.WarningAmber
 import com.example.islam.ui.theme.WarningAmberBg
 import com.example.islam.ui.theme.WarningAmberDim
@@ -63,13 +71,27 @@ private val themeOptions = listOf(
     2 to "Açık Tema"
 )
 
+private val dailyGoalOptions = listOf(
+    1 to "1 vakit",
+    2 to "2 vakit",
+    3 to "3 vakit",
+    4 to "4 vakit",
+    5 to "5 vakit"
+)
+
 // ─── Ana ekran ────────────────────────────────────────────────────────────────
 
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
-    val state   by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
-    val strings = LocalStrings.current
+fun SettingsScreen(
+    navController: NavController = rememberNavController(),
+    viewModel: SettingsViewModel = hiltViewModel(),
+    authViewModel: GoogleAuthViewModel = hiltViewModel()
+) {
+    val state      by viewModel.uiState.collectAsState()
+    val context    = LocalContext.current
+    val firebaseAnalytics = remember(context) { FirebaseAnalytics.getInstance(context) }
+    val strings    = LocalStrings.current
+    val currentUser by authViewModel.currentUserFlow.collectAsStateWithLifecycle(initialValue = authViewModel.currentUser)
 
     val batteryExempted by produceState(initialValue = true, key1 = Unit) {
         value = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
@@ -148,6 +170,22 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             )
         }
 
+        // ── Günlük Namaz Hedefi (Streak) ─────────────────────────────────────
+        SettingsCard(title = "Günlük Namaz Hedefi") {
+            Text(
+                text  = "Streak için günlük hedeflediğiniz vakit sayısını seçin.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+            Spacer(Modifier.height(8.dp))
+            IntDropdown(
+                label      = "Günlük Hedef",
+                options    = dailyGoalOptions,
+                selectedId = state.preferences.dailyPrayerGoal,
+                onSelected = viewModel::setDailyPrayerGoal
+            )
+        }
+
         // ── Hesaplama Metodu ──────────────────────────────────────────────────
         SettingsCard(title = strings.calculationMethodTitle) {
             Text(
@@ -160,7 +198,31 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 label      = strings.calculationMethodTitle,
                 options    = strings.calcMethods,
                 selectedId = state.preferences.calculationMethod,
-                onSelected = viewModel::setCalculationMethod
+                onSelected = { selectedMethod ->
+                    val previousMethod = state.preferences.calculationMethod
+                    if (selectedMethod == previousMethod) return@IntDropdown
+
+                    val previousLabel = strings.calcMethods
+                        .firstOrNull { it.first == previousMethod }
+                        ?.second
+                        ?: "unknown"
+                    val selectedLabel = strings.calcMethods
+                        .firstOrNull { it.first == selectedMethod }
+                        ?.second
+                        ?: "unknown"
+
+                    firebaseAnalytics.logEvent(
+                        "method_changed",
+                        Bundle().apply {
+                            putInt("previous_method_id", previousMethod)
+                            putString("previous_method_label", previousLabel)
+                            putInt("method_id", selectedMethod)
+                            putString("method_label", selectedLabel)
+                            putString("source_screen", "settings")
+                        }
+                    )
+                    viewModel.setCalculationMethod(selectedMethod)
+                }
             )
         }
 
@@ -186,6 +248,122 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 selectedCode = state.preferences.language,
                 onSelected   = viewModel::setLanguage
             )
+        }
+
+        // ── Kişiselleştirme ────────────────────────────────────────────────
+        SettingsCard(title = strings.nameEditTitle) {
+            var displayNameInput by rememberSaveable(state.preferences.displayName) {
+                mutableStateOf(state.preferences.displayName)
+            }
+            Text(
+                text = strings.namePromptDescription,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+            )
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = displayNameInput,
+                onValueChange = { displayNameInput = it },
+                singleLine = true,
+                label = { Text(strings.nameInputLabel) },
+                placeholder = { Text(strings.nameInputPlaceholder) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.secondary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                    focusedLabelColor = MaterialTheme.colorScheme.secondary
+                )
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Button(
+                    onClick = {
+                        viewModel.setDisplayName(displayNameInput)
+                        firebaseAnalytics.logEvent(
+                            "name_saved",
+                            Bundle().apply {
+                                putString("source_screen", "settings")
+                                putString("language", state.preferences.language)
+                                putString("signed_in", (currentUser != null).toString())
+                            }
+                        )
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(strings.nameSave)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = strings.personalizedAddressingTitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = strings.personalizedAddressingDesc,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                Switch(
+                    checked = state.preferences.personalizedAddressingEnabled,
+                    onCheckedChange = { enabled ->
+                        viewModel.setPersonalizedAddressing(enabled)
+                        firebaseAnalytics.logEvent(
+                            "personalized_addressing_toggled",
+                            Bundle().apply {
+                                putString("source_screen", "settings")
+                                putString("language", state.preferences.language)
+                                putString("enabled", enabled.toString())
+                                putString("signed_in", (currentUser != null).toString())
+                            }
+                        )
+                    }
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = strings.personalizedNotificationsTitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = strings.personalizedNotificationsDesc,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                Switch(
+                    checked = state.preferences.personalizedNotificationsEnabled,
+                    onCheckedChange = { enabled ->
+                        viewModel.setPersonalizedNotifications(enabled)
+                        firebaseAnalytics.logEvent(
+                            "personalized_notifications_toggled",
+                            Bundle().apply {
+                                putString("source_screen", "settings")
+                                putString("language", state.preferences.language)
+                                putString("enabled", enabled.toString())
+                                putString("signed_in", (currentUser != null).toString())
+                            }
+                        )
+                    }
+                )
+            }
         }
 
         // ── Namaz Bildirimleri ────────────────────────────────────────────────
@@ -254,13 +432,90 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             )
         }
 
+        // ── Hesabım (Firebase Auth) ───────────────────────────────────────────
+        SettingsCard(title = "Hesabım") {
+            val user = currentUser  // delegate'den local val'e al — smart cast çalışsın
+            if (user != null) {
+                // Giriş yapılmış
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AccountCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = user.displayName ?: "Kullanıcı",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = user.email ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = { authViewModel.signOut() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Çıkış Yap", color = MaterialTheme.colorScheme.error)
+                }
+            } else {
+                // Giriş yapılmamış
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { navController.navigate(Screen.GoogleAuth.route) }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AccountCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Google ile Giriş Yap",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Streak senkronu ve Ramazan bildirimleri",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Outlined.OpenInNew,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+
         // ── Hakkında & Yasal ──────────────────────────────────────────────────
         SettingsCard(title = "Hakkında & Yasal") {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        val uri = android.net.Uri.parse("https://your-privacy-policy-url.com")
+                        val uri = android.net.Uri.parse("https://musliapp.github.io/privacy-policy")
                         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
                         context.startActivity(intent)
                     }

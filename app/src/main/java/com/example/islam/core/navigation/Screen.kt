@@ -9,7 +9,9 @@ sealed class Screen(val route: String) {
             "surah_reader/$surahId/$surahName/$isJuz/$startVerse"
     }
     object PrayerTimes : Screen("prayer_times")
+    object RamadanPlanner : Screen("ramadan_planner")
     object Dhikr       : Screen("dhikr")
     object Qibla       : Screen("qibla")
     object Settings    : Screen("settings")
+    object GoogleAuth  : Screen("google_auth")
 }

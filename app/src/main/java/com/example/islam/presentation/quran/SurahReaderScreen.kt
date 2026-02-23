@@ -122,7 +122,7 @@ fun SurahReaderScreen(
             }
         }
 
-        if (uiState.verses.isNotEmpty() && !uiState.isJuz) {
+        if (uiState.verses.isNotEmpty()) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -134,6 +134,7 @@ fun SurahReaderScreen(
                     (audioState.positionMs.toFloat() / audioState.durationMs).coerceIn(0f, 1f)
                 else 0f
                 FloatingAudioPlayer(
+                    currentVerseNumber = audioState.currentVerseIndex + 1,
                     reciterName = audioState.currentSurahName.ifEmpty { surahName },
                     currentTime = formatTime(audioState.positionMs),
                     progress = progress,
@@ -253,6 +254,7 @@ private fun VerseBlock(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onPlayClick)
             .border(1.dp, Gray100.copy(alpha = 0.5f))
             .padding(horizontal = 20.dp, vertical = 24.dp)
     ) {
@@ -261,12 +263,7 @@ private fun VerseBlock(
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.Top
         ) {
-            Box(
-                modifier = Modifier
-                    .clickable(onClick = onPlayClick)
-            ) {
-                AyahBadge(number = verse.numberInSurah)
-            }
+            AyahBadge(number = verse.numberInSurah)
             Spacer(Modifier.width(16.dp))
             Text(
                 text = verse.arabic,
@@ -351,6 +348,7 @@ private fun AyahBadge(number: Int) {
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 private fun FloatingAudioPlayer(
+    currentVerseNumber: Int,
     reciterName: String,
     currentTime: String,
     progress: Float,
@@ -377,30 +375,42 @@ private fun FloatingAudioPlayer(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Reciter avatar — Rub el Hizb ikonu
+            // Şu an okunan ayet numarası — sol tarafta daire içinde
             Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(PrimaryDark.copy(alpha = 0.5f))
-                    .border(1.dp, White.copy(alpha = 0.1f), CircleShape),
+                modifier = Modifier.size(48.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Canvas(modifier = Modifier.size(24.dp)) {
+                Canvas(modifier = Modifier.size(48.dp)) {
                     val cx = size.minDimension / 2f
                     val cy = size.minDimension / 2f
-                    val r = size.minDimension * 0.4f
-                    val path = Path().apply {
+                    val starPath = Path().apply {
+                        val outerR = size.minDimension * 0.2f
+                        val innerR = outerR * 0.4f
                         for (i in 0 until 8) {
-                            val angle = (i * 45 - 90) * Math.PI / 180
-                            val x = cx + (r * kotlin.math.cos(angle)).toFloat()
-                            val y = cy + (r * kotlin.math.sin(angle)).toFloat()
-                            if (i == 0) moveTo(x, y) else lineTo(x, y)
+                            val angleOut = (i * 45 - 90) * Math.PI / 180
+                            val xOut = cx + (outerR * kotlin.math.cos(angleOut)).toFloat()
+                            val yOut = cy + (outerR * kotlin.math.sin(angleOut)).toFloat()
+                            val angleIn = ((i + 0.5) * 45 - 90) * Math.PI / 180
+                            val xIn = cx + (innerR * kotlin.math.cos(angleIn)).toFloat()
+                            val yIn = cy + (innerR * kotlin.math.sin(angleIn)).toFloat()
+                            if (i == 0) moveTo(xOut, yOut) else lineTo(xOut, yOut)
+                            lineTo(xIn, yIn)
                         }
                         close()
                     }
-                    drawPath(path, color = AccentYellow)
+                    drawPath(starPath, color = AccentYellow.copy(alpha = 0.15f))
+                    drawCircle(
+                        color = White,
+                        radius = size.minDimension / 2f - 2,
+                        style = Stroke(width = 2f)
+                    )
                 }
+                Text(
+                    text = "$currentVerseNumber",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = White
+                )
             }
 
             // Bilgi + progress

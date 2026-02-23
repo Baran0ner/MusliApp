@@ -1,8 +1,13 @@
 package com.example.islam.presentation.qibla
 
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -13,10 +18,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
@@ -28,9 +35,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.example.islam.core.i18n.LocalStrings
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.min
 import kotlin.math.sin
 
 // ─── Renkler ──────────────────────────────────────────────────────────────────
@@ -51,16 +61,39 @@ fun QiblaScreen(
     navController: NavController,
     viewModel: QiblaViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val strings = LocalStrings.current
 
     // bearingToQibla: cihazın şu an hangi açıda döndüğünü hesaba katarak
     // kullanıcının kıbleye ulaşmak için döndürmesi gereken gerçek açıdır.
     // qiblaAngle ise sadece Kabe'nin coğrafi kuzeyden sabit açısıdır — asla değişmez.
     val rawBearing = uiState.compass?.bearingToQibla ?: 0f
+    val pitch = uiState.compass?.pitch ?: 0f
+    val roll = uiState.compass?.roll ?: 0f
+
+    val alignErrorDeg = angularDistanceToZero(rawBearing)
+    val isAligned = alignErrorDeg <= 3f
+
+    // 0/360 geçişinde "tam tur" dönmeyi engelle: açıyı unwrap et ve en kısa yolu dön.
+    var unwrappedBearing by remember { mutableFloatStateOf(rawBearing) }
+    var lastBearing by remember { mutableFloatStateOf(rawBearing) }
+    var initialized by remember { mutableStateOf(false) }
+
+    LaunchedEffect(rawBearing) {
+        if (!initialized) {
+            unwrappedBearing = rawBearing
+            lastBearing = rawBearing
+            initialized = true
+        } else {
+            val delta = shortestDeltaDeg(lastBearing, rawBearing)
+            unwrappedBearing += delta
+            lastBearing = rawBearing
+        }
+    }
 
     // Yumuşak yay animasyonu — ok titremeden akıcı döner
     val animatedBearing by animateFloatAsState(
-        targetValue = rawBearing,
+        targetValue = unwrappedBearing,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessLow
@@ -82,7 +115,7 @@ fun QiblaScreen(
                 ) {
                     CircularProgressIndicator(color = Gold)
                     Text(
-                        text = "Pusula başlatılıyor...",
+                        text = strings.qiblaDirection,
                         color = TextMuted,
                         fontSize = 13.sp
                     )
@@ -106,13 +139,13 @@ fun QiblaScreen(
                         fontSize = 40.sp
                     )
                     Text(
-                        text = "Pusula sensörü bulunamadı",
+                        text = strings.noSensor,
                         color = Gold,
                         style = MaterialTheme.typography.titleMedium,
                         textAlign = TextAlign.Center
                     )
                     Text(
-                        text = "Bu cihazda manyetometre veya ivmeölçer sensörü mevcut değil.",
+                        text = strings.magnetometerRequired,
                         color = TextMuted,
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center
@@ -121,14 +154,24 @@ fun QiblaScreen(
             }
         }
         else -> {
-            QiblaContent(qiblaDegrees = animatedBearing)
+            QiblaContent(
+                qiblaDegrees = animatedBearing,
+                isAligned = isAligned,
+                tiltPitch = pitch,
+                tiltRoll = roll
+            )
         }
     }
 }
 
 // ─── İçerik ───────────────────────────────────────────────────────────────────
 @Composable
-private fun QiblaContent(qiblaDegrees: Float) {
+private fun QiblaContent(
+    qiblaDegrees: Float,
+    isAligned: Boolean,
+    tiltPitch: Float,
+    tiltRoll: Float
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -161,9 +204,14 @@ private fun QiblaContent(qiblaDegrees: Float) {
         ) {
             QiblaHeader()
             Spacer(Modifier.weight(1f))
-            CompassDial(arrowRotationDeg = qiblaDegrees)
+            CompassDial(
+                arrowRotationDeg = qiblaDegrees,
+                isAligned = isAligned,
+                tiltPitch = tiltPitch,
+                tiltRoll = tiltRoll
+            )
             Spacer(Modifier.height(28.dp))
-            QiblaLabel()
+            QiblaLabel(isAligned = isAligned)
             Spacer(Modifier.weight(1f))
         }
     }
@@ -172,6 +220,7 @@ private fun QiblaContent(qiblaDegrees: Float) {
 // ─── Başlık ───────────────────────────────────────────────────────────────────
 @Composable
 private fun QiblaHeader() {
+    val strings = LocalStrings.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -195,7 +244,7 @@ private fun QiblaHeader() {
             letterSpacing = 2.sp
         )
         Text(
-            text = "KIBLE YÖNÜ",
+            text = strings.qiblaDirection.uppercase(),
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             color = TextWhite,
@@ -214,11 +263,21 @@ private fun QiblaHeader() {
 
 // ─── Kıble Etiketi ────────────────────────────────────────────────────────────
 @Composable
-private fun QiblaLabel() {
+private fun QiblaLabel(isAligned: Boolean) {
+    val strings = LocalStrings.current
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
+        if (isAligned) {
+            Text(
+                text = strings.qiblaAligned,
+                color = Gold,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(8.dp))
+        }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -254,13 +313,62 @@ private fun QiblaLabel() {
 
 // ─── Pusula ───────────────────────────────────────────────────────────────────
 @Composable
-private fun CompassDial(arrowRotationDeg: Float) {
+private fun CompassDial(
+    arrowRotationDeg: Float,
+    isAligned: Boolean,
+    tiltPitch: Float,
+    tiltRoll: Float
+) {
     val dialSize = 280.dp
+    val transition = rememberInfiniteTransition(label = "qiblaGlow")
+    val glowAlpha by transition.animateFloat(
+        initialValue = 0.10f,
+        targetValue = 0.28f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glowAlpha"
+    )
+    val glowScale by transition.animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glowScale"
+    )
 
     Box(
-        modifier = Modifier.size(dialSize),
+        modifier = Modifier
+            .size(dialSize)
+            .graphicsLayer {
+                rotationX = tiltPitch.coerceIn(-8f, 8f)
+                rotationY = (-tiltRoll).coerceIn(-8f, 8f)
+                cameraDistance = 18f * density
+                shadowElevation = if (isAligned) 14.dp.toPx() else 8.dp.toPx()
+            },
         contentAlignment = Alignment.Center
     ) {
+        if (isAligned) {
+            Box(
+                modifier = Modifier
+                    .size(dialSize - 10.dp)
+                    .align(Alignment.Center)
+                    .scale(glowScale)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Gold.copy(alpha = glowAlpha),
+                                Color.Transparent
+                            )
+                        ),
+                        shape = CircleShape
+                    )
+            )
+        }
+
         // Dış halka — altın gradient
         Canvas(modifier = Modifier.fillMaxSize()) {
             drawGoldRing(size.width / 2, size.height / 2, size.width / 2 - 2.dp.toPx())
@@ -488,6 +596,17 @@ private fun DrawScope.drawGoldRing(cx: Float, cy: Float, radius: Float) {
     )
 }
 
+// ─── Açı yardımcıları ──────────────────────────────────────────────────────────
+private fun shortestDeltaDeg(from: Float, to: Float): Float {
+    // (-180, 180] aralığında en kısa dönüş
+    return (to - from + 540f) % 360f - 180f
+}
+
+private fun angularDistanceToZero(deg: Float): Float {
+    val d = ((deg % 360f) + 360f) % 360f
+    return min(d, 360f - d)
+}
+
 // ─── Canvas: Derece çizgileri ─────────────────────────────────────────────────
 private fun DrawScope.drawTickMarks() {
     val cx = size.width / 2f
@@ -568,6 +687,11 @@ private fun DrawScope.drawSquareDiamond(cx: Float, cy: Float, r: Float, color: C
 @Composable
 private fun QiblaPreview() {
     MaterialTheme {
-        QiblaContent(qiblaDegrees = 147f)
+        QiblaContent(
+            qiblaDegrees = 147f,
+            isAligned = true,
+            tiltPitch = 2f,
+            tiltRoll = -1.5f
+        )
     }
 }

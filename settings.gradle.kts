@@ -21,5 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Islam"
 include(":app")
-include(":app")
+include(":benchmark")
  

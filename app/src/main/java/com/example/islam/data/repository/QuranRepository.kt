@@ -88,13 +88,14 @@ class QuranRepository @Inject constructor(
             val transliterationTr = runCatching { withTimeout(VERSE_API_TIMEOUT_MS) { api.getJuzTransliterationTr(juzNumber) } }.getOrNull()
             val translationMap = translationTr?.data?.ayahs?.associateBy { it.number } ?: emptyMap()
             val transliterationMap = transliterationTr?.data?.ayahs?.associateBy { it.number } ?: emptyMap()
-            val verses = response.data.ayahs.mapIndexed { index, ayah ->
+            val verses = response.data.ayahs.map { ayah ->
                 VerseModel(
-                    numberInSurah = index + 1,
+                    numberInSurah = ayah.numberInSurah,
                     arabic = ayah.text.trim(),
                     transliteration = transliterationMap[ayah.number]?.text?.trim() ?: "",
                     translation = translationMap[ayah.number]?.text?.trim() ?: "",
-                    globalNumber = ayah.number
+                    globalNumber = ayah.number,
+                    surahNumber = ayah.surah?.number
                 )
             }
             Result.success(subtitle to verses)

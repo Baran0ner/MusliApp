@@ -4,17 +4,24 @@ import android.Manifest
 import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
@@ -35,7 +42,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -49,16 +58,29 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.islam.R
+import com.example.islam.core.i18n.AppStrings
 import com.example.islam.core.i18n.LocalStrings
 import com.example.islam.core.navigation.Screen
 import com.example.islam.domain.model.DailyQuote
 import com.example.islam.domain.model.Prayer
+import com.example.islam.domain.model.PrayerPhase
 import com.example.islam.domain.model.PrayerTime
 import com.example.islam.domain.model.QuoteType
 import com.example.islam.domain.model.timeFor
 import com.example.islam.core.util.DateUtil.cleanTime
+import com.example.islam.presentation.auth.GoogleAuthViewModel
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.example.islam.ui.theme.EmeraldBg
+import com.example.islam.ui.theme.EmeraldBgDarker
+import com.example.islam.ui.theme.SkyAfternoonTop
+import com.example.islam.ui.theme.SkyDawnTop
+import com.example.islam.ui.theme.SkyNightTop
+import com.example.islam.ui.theme.SkyNoonTop
+import com.example.islam.ui.theme.SkySunsetTop
+import java.time.LocalDate
 
 // ─────────────────────────────────────────────────────────────────────────────
 // İçerik durumları
@@ -79,99 +101,484 @@ private enum class PermissionStep { LOCATION, NOTIFICATION, EXACT_ALARM, DONE }
 @Composable
 fun HomeScreen(
     navController: NavController,
-    viewModel: HomeViewModel = hiltViewModel()
+    viewModel: HomeViewModel = hiltViewModel(),
+    authViewModel: GoogleAuthViewModel = hiltViewModel()
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val prayerPhase by viewModel.currentPrayerPhase.collectAsStateWithLifecycle()
+    val strings = LocalStrings.current
+    val context = LocalContext.current
+    val firebaseAnalytics = remember(context) { FirebaseAnalytics.getInstance(context) }
+    val currentUser by authViewModel.currentUserFlow.collectAsStateWithLifecycle(initialValue = authViewModel.currentUser)
+    var previousStreak by remember { mutableStateOf<Int?>(null) }
+    var promptShownTracked by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.prayerStreak, state.completedPrayersToday, state.dailyPrayerGoal) {
+        val oldValue = previousStreak
+        if (
+            oldValue != null &&
+            state.prayerStreak > oldValue &&
+            state.completedPrayersToday >= state.dailyPrayerGoal
+        ) {
+            firebaseAnalytics.logEvent(
+                "streak_completed",
+                Bundle().apply {
+                    putInt("streak_days", state.prayerStreak)
+                    putInt("daily_goal", state.dailyPrayerGoal)
+                    putInt("completed_today", state.completedPrayersToday)
+                    putString("completed_date", LocalDate.now().toString())
+                    putString("source_screen", "home")
+                }
+            )
+        }
+        previousStreak = state.prayerStreak
+    }
+
+    val firebaseFallbackName = remember(currentUser?.displayName) {
+        currentUser?.displayName?.trim().orEmpty()
+    }
+    val effectiveDisplayName = remember(state.displayName, firebaseFallbackName) {
+        state.displayName.ifBlank { firebaseFallbackName }
+    }
+    val showNamePromptCard = remember(state.showNamePromptCard, effectiveDisplayName) {
+        state.showNamePromptCard && effectiveDisplayName.isBlank()
+    }
+    val greetingText = remember(
+        state.personalizedAddressingEnabled,
+        effectiveDisplayName,
+        strings
+    ) {
+        when {
+            state.personalizedAddressingEnabled && effectiveDisplayName.isNotBlank() ->
+                strings.greetingWithNameFormat.format(effectiveDisplayName)
+            else -> strings.greetingGeneric
+        }
+    }
+    val streakCongratsText = remember(
+        state.completedPrayersToday,
+        state.dailyPrayerGoal,
+        state.personalizedAddressingEnabled,
+        effectiveDisplayName,
+        strings
+    ) {
+        if (state.completedPrayersToday < state.dailyPrayerGoal) {
+            null
+        } else if (state.personalizedAddressingEnabled && effectiveDisplayName.isNotBlank()) {
+            strings.streakCongratsWithNameFormat.format(effectiveDisplayName)
+        } else {
+            strings.streakCongrats
+        }
+    }
+
+    LaunchedEffect(showNamePromptCard) {
+        if (showNamePromptCard && !promptShownTracked) {
+            firebaseAnalytics.logEvent(
+                "name_prompt_shown",
+                Bundle().apply {
+                    putString("source_screen", "home")
+                    putString("language", state.userPreferences.language)
+                    putString("signed_in", (currentUser != null).toString())
+                }
+            )
+            promptShownTracked = true
+        }
+    }
 
     if (!state.permissionsGranted) {
         HomePermissionFlow(onAllGranted = viewModel::onPermissionsGranted)
         return
     }
 
-    // ── ViewModel state'inden görünür değerleri hazırla ──────────────────────
-    val prayerNameStr = state.nextPrayer?.prayer?.turkishName ?: "—"
-
-    val prayerTimeStr = state.prayerTime?.let { pt ->
-        state.nextPrayer?.let { np ->
-            pt.timeFor(np.prayer).cleanTime()
-        }
-    } ?: "--:--"
-
-    val countdownStr = state.countdownText.let { raw ->
-        val parts = raw.split(":")
-        if (parts.size == 3) {
-            val h = parts[0].trimStart('0').ifEmpty { "0" }
-            val m = parts[1].trimStart('0').ifEmpty { "0" }
-            val s = parts[2]
-            when {
-                h != "0" -> "Sonraki vakte ${h}sa ${m}dk"
-                else     -> "Sonraki vakte ${s}s ${m}dk"
-            }
-        } else raw
+    val activePrayerName by remember(state.nextPrayer?.prayer) {
+        derivedStateOf { state.nextPrayer?.prayer?.name?.lowercase() ?: "" }
+    }
+    val prayerItems by remember(state.prayerTime, activePrayerName, strings) {
+        derivedStateOf { buildPrayerDisplayItems(state.prayerTime, activePrayerName, strings) }
+    }
+    val contentState by remember(state, prayerItems, strings) {
+        derivedStateOf { state.toHomeContentState(prayerItems, strings) }
     }
 
-    val gregorianStr = state.todayDateText
-    val hijriStr     = state.prayerTime?.hijriDate ?: ""
-    val verseText    = state.dailyQuote?.text
-        ?.let { "\u201C$it\u201D" }
-        ?: "\u201CVerily, in the remembrance of Allah do hearts find rest.\u201D"
-    val verseRef     = state.dailyQuote?.source ?: "Quran 13:28"
-
-    // ── Namaz vakitleri — HTML'deki icon + renk eşleşmesiyle ─────────────────
-    val activePrayerName = state.nextPrayer?.prayer?.name?.lowercase() ?: ""
-    val prayerItems = state.prayerTime?.let { pt ->
-        listOf(
-            PrayerDisplayItem(
-                name     = "Sabah",
-                time     = pt.fajr.cleanTime(),
-                icon     = androidx.compose.material.icons.Icons.Outlined.DarkMode,
-                iconTint = Color.White,
-                isActive = activePrayerName == "fajr"
-            ),
-            PrayerDisplayItem(
-                name     = "Öğle",
-                time     = pt.dhuhr.cleanTime(),
-                icon     = androidx.compose.material.icons.Icons.Outlined.WbSunny,
-                iconTint = Color(0xFFD4AF37),
-                isActive = activePrayerName == "dhuhr"
-            ),
-            PrayerDisplayItem(
-                name     = "İkindi",
-                time     = pt.asr.cleanTime(),
-                icon     = androidx.compose.material.icons.Icons.Outlined.WbTwilight,
-                iconTint = Color(0xFFD4AF37),
-                isActive = activePrayerName == "asr"
-            ),
-            PrayerDisplayItem(
-                name     = "Akşam",
-                time     = pt.maghrib.cleanTime(),
-                icon     = androidx.compose.material.icons.Icons.Outlined.WbTwilight,
-                iconTint = Color(0xFFFB923C),
-                isActive = activePrayerName == "maghrib"
-            ),
-            PrayerDisplayItem(
-                name     = "Yatsı",
-                time     = pt.isha.cleanTime(),
-                icon     = androidx.compose.material.icons.Icons.Outlined.Brightness2,
-                iconTint = Color(0xFFA5B4FC),
-                isActive = activePrayerName == "isha"
-            )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+    ) {
+        HomeSkyBackgroundLayer(prayerPhase = prayerPhase)
+        DawnHomeScreen(
+            greetingText  = greetingText,
+            prayerName    = contentState.prayerName,
+            time          = contentState.currentTime,
+            countdown     = contentState.countdown,
+            gregorianDate = contentState.gregorianDate,
+            hijriDate     = contentState.hijriDate,
+            verseText     = contentState.verseText,
+            verseRef      = contentState.verseRef,
+            prayerItems   = contentState.prayerItems,
+            streakDays    = state.prayerStreak,
+            completedToday = state.completedPrayersToday,
+            dailyGoal     = state.dailyPrayerGoal,
+            weeklyVisitMask = state.homeStreakWeekMask,
+            streakCongratsText = streakCongratsText,
+            showNamePromptCard = showNamePromptCard,
+            onSaveName = { name ->
+                viewModel.saveDisplayName(name)
+                firebaseAnalytics.logEvent(
+                    "name_saved",
+                    Bundle().apply {
+                        putString("source_screen", "home")
+                        putString("language", state.userPreferences.language)
+                        putString("signed_in", (currentUser != null).toString())
+                    }
+                )
+            },
+            onSkipNamePrompt = {
+                viewModel.dismissNamePromptCard()
+                firebaseAnalytics.logEvent(
+                    "name_prompt_skipped",
+                    Bundle().apply {
+                        putString("source_screen", "home")
+                        putString("language", state.userPreferences.language)
+                        putString("signed_in", (currentUser != null).toString())
+                    }
+                )
+            },
+            onQiblaClick  = { navController.navigate(Screen.Qibla.route) },
+            onTasbihClick = { navController.navigate(Screen.Dhikr.route) }
         )
-    } ?: defaultPrayerItems()
+    }
+}
 
-    // ── DawnHomeScreen'i gerçek verilerle göster ─────────────────────────────
-    DawnHomeScreen(
-        prayerName    = prayerNameStr,
-        time          = prayerTimeStr,
-        countdown     = countdownStr,
-        gregorianDate = gregorianStr,
-        hijriDate     = hijriStr,
-        verseText     = verseText,
-        verseRef      = verseRef,
-        prayerItems   = prayerItems,
-        onQiblaClick  = { navController.navigate(Screen.Qibla.route) },
-        onTasbihClick = { navController.navigate(Screen.Dhikr.route) }
+@Composable
+private fun HomeSkyBackgroundLayer(prayerPhase: PrayerPhase) {
+    val targetTop by remember(prayerPhase) {
+        derivedStateOf {
+            when (prayerPhase) {
+                PrayerPhase.DAWN -> SkyDawnTop
+                PrayerPhase.NOON -> SkyNoonTop
+                PrayerPhase.AFTERNOON -> SkyAfternoonTop
+                PrayerPhase.SUNSET -> SkySunsetTop
+                PrayerPhase.NIGHT -> SkyNightTop
+            }
+        }
+    }
+    val targetBottom by remember(prayerPhase) {
+        derivedStateOf {
+            if (prayerPhase == PrayerPhase.NIGHT) EmeraldBgDarker else EmeraldBg
+        }
+    }
+    val gradientTop by animateColorAsState(
+        targetValue = targetTop,
+        animationSpec = tween(durationMillis = 2500),
+        label = "skyGradientTop"
     )
+    val gradientBottom by animateColorAsState(
+        targetValue = targetBottom,
+        animationSpec = tween(durationMillis = 2500),
+        label = "skyGradientBottom"
+    )
+    val skyBrush by remember(gradientTop, gradientBottom) {
+        derivedStateOf { Brush.verticalGradient(colors = listOf(gradientTop, gradientBottom)) }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(skyBrush)
+    ) {
+        SkyPhaseDecoration(phase = prayerPhase)
+        PrayerPhaseGlowOverlay(phase = prayerPhase)
+    }
+}
+
+private fun HomeUiState.toHomeContentState(
+    prayerItems: List<PrayerDisplayItem>,
+    strings: AppStrings
+): HomeContentStateData {
+    val countdownStr = "${strings.nextPrayer}: $countdownText"
+    return HomeContentStateData(
+        prayerName = nextPrayer?.prayer?.let { strings.prayerName(it) } ?: "—",
+        currentTime = currentTimeText.ifBlank { "--:--" },
+        countdown = countdownStr,
+        gregorianDate = todayDateText,
+        hijriDate = prayerTime?.hijriDate ?: "",
+        verseText = dailyQuote?.text?.let { "\u201C$it\u201D" }
+            ?: "\u201CVerily, in the remembrance of Allah do hearts find rest.\u201D",
+        verseRef = dailyQuote?.source ?: "Quran 13:28",
+        prayerItems = prayerItems
+    )
+}
+
+private fun buildPrayerDisplayItems(
+    prayerTime: PrayerTime?,
+    activePrayerName: String,
+    strings: AppStrings
+): List<PrayerDisplayItem> {
+    val pt = prayerTime ?: return listOf(
+        PrayerDisplayItem(
+            name = strings.prayerFajr,
+            time = "06:19",
+            icon = androidx.compose.material.icons.Icons.Outlined.DarkMode,
+            iconTint = Color.White,
+            isActive = activePrayerName == "fajr",
+            iconResId = R.drawable.icon_sabah
+        ),
+        PrayerDisplayItem(
+            name = strings.prayerDhuhr,
+            time = "13:23",
+            icon = androidx.compose.material.icons.Icons.Outlined.WbSunny,
+            iconTint = Color(0xFFD4AF37),
+            isActive = activePrayerName == "dhuhr",
+            iconResId = R.drawable.icon_ogle
+        ),
+        PrayerDisplayItem(
+            name = strings.prayerAsr,
+            time = "16:21",
+            icon = androidx.compose.material.icons.Icons.Outlined.WbTwilight,
+            iconTint = Color(0xFFD4AF37),
+            isActive = activePrayerName == "asr",
+            iconResId = R.drawable.icon_ikindi
+        ),
+        PrayerDisplayItem(
+            name = strings.prayerMaghrib,
+            time = "18:53",
+            icon = androidx.compose.material.icons.Icons.Outlined.WbTwilight,
+            iconTint = Color(0xFFFB923C),
+            isActive = activePrayerName == "maghrib",
+            iconResId = R.drawable.icon_aksam
+        ),
+        PrayerDisplayItem(
+            name = strings.prayerIsha,
+            time = "20:12",
+            icon = androidx.compose.material.icons.Icons.Outlined.Brightness2,
+            iconTint = Color(0xFFA5B4FC),
+            isActive = activePrayerName == "isha",
+            iconResId = R.drawable.icon_yatsi
+        )
+    )
+    return listOf(
+        PrayerDisplayItem(
+            name = strings.prayerFajr,
+            time = pt.fajr.cleanTime(),
+            icon = androidx.compose.material.icons.Icons.Outlined.DarkMode,
+            iconTint = Color.White,
+            isActive = activePrayerName == "fajr",
+            iconResId = R.drawable.icon_sabah
+        ),
+        PrayerDisplayItem(
+            name = strings.prayerDhuhr,
+            time = pt.dhuhr.cleanTime(),
+            icon = androidx.compose.material.icons.Icons.Outlined.WbSunny,
+            iconTint = Color(0xFFD4AF37),
+            isActive = activePrayerName == "dhuhr",
+            iconResId = R.drawable.icon_ogle
+        ),
+        PrayerDisplayItem(
+            name = strings.prayerAsr,
+            time = pt.asr.cleanTime(),
+            icon = androidx.compose.material.icons.Icons.Outlined.WbTwilight,
+            iconTint = Color(0xFFD4AF37),
+            isActive = activePrayerName == "asr",
+            iconResId = R.drawable.icon_ikindi
+        ),
+        PrayerDisplayItem(
+            name = strings.prayerMaghrib,
+            time = pt.maghrib.cleanTime(),
+            icon = androidx.compose.material.icons.Icons.Outlined.WbTwilight,
+            iconTint = Color(0xFFFB923C),
+            isActive = activePrayerName == "maghrib",
+            iconResId = R.drawable.icon_aksam
+        ),
+        PrayerDisplayItem(
+            name = strings.prayerIsha,
+            time = pt.isha.cleanTime(),
+            icon = androidx.compose.material.icons.Icons.Outlined.Brightness2,
+            iconTint = Color(0xFFA5B4FC),
+            isActive = activePrayerName == "isha",
+            iconResId = R.drawable.icon_yatsi
+        )
+    )
+}
+
+private data class HomeContentStateData(
+    val prayerName: String,
+    val currentTime: String,
+    val countdown: String,
+    val gregorianDate: String,
+    val hijriDate: String,
+    val verseText: String,
+    val verseRef: String,
+    val prayerItems: List<PrayerDisplayItem>
+)
+
+@Composable
+private fun PrayerPhaseGlowOverlay(phase: PrayerPhase) {
+    val infinite = rememberInfiniteTransition(label = "phaseGlow")
+    val drift by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 7000, easing = androidx.compose.animation.core.LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "phaseGlowDrift"
+    )
+
+    val glowColor = when (phase) {
+        PrayerPhase.NOON -> Color(0xFFF5D371)
+        PrayerPhase.AFTERNOON -> Color(0xFFE7B55D)
+        PrayerPhase.DAWN -> Color(0xFFD8C79A)
+        PrayerPhase.SUNSET -> Color(0xFFC08B6D)
+        PrayerPhase.NIGHT -> Color(0xFF8FB29F)
+    }
+    val baseAlpha = when (phase) {
+        PrayerPhase.NOON -> 0.23f
+        PrayerPhase.AFTERNOON -> 0.18f
+        PrayerPhase.DAWN -> 0.14f
+        PrayerPhase.SUNSET -> 0.11f
+        PrayerPhase.NIGHT -> 0.08f
+    }
+    val startY = -180f + (220f * drift)
+    val endY = 380f + (220f * drift)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        glowColor.copy(alpha = baseAlpha),
+                        glowColor.copy(alpha = baseAlpha * 0.35f),
+                        Color.Transparent
+                    ),
+                    startY = startY,
+                    endY = endY
+                )
+            )
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gökyüzü süslemesi — vakte göre güneş/ay (tatlı, animasyonlu)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun SkyPhaseDecoration(phase: PrayerPhase) {
+    val infiniteTransition = rememberInfiniteTransition(label = "skyDecoration")
+    val sunScale by infiniteTransition.animateFloat(
+        initialValue = 0.96f,
+        targetValue = 1.04f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2800),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "sunScale"
+    )
+    val sunAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.72f,
+        targetValue = 0.88f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3200),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "sunAlpha"
+    )
+
+    when (phase) {
+        PrayerPhase.NOON -> {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(top = 32.dp)
+                    .scale(sunScale)
+                    .alpha(sunAlpha),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Canvas(modifier = Modifier.size(120.dp)) {
+                    val r = size.minDimension / 2f
+                    val c = Offset(r, r)
+                    // Dış hale — yumuşak altın
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFE8C547).copy(alpha = 0.35f),
+                                Color(0xFFD4AF37).copy(alpha = 0.18f),
+                                Color.Transparent
+                            ),
+                            center = c,
+                            radius = r
+                        )
+                    )
+                    // İç çekirdek — hafif daha parlak
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFF5E6A3).copy(alpha = 0.5f),
+                                Color(0xFFE8C547).copy(alpha = 0.2f),
+                                Color.Transparent
+                            ),
+                            center = c,
+                            radius = r * 0.5f
+                        )
+                    )
+                }
+            }
+        }
+        PrayerPhase.AFTERNOON -> {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(top = 40.dp)
+                    .scale(sunScale * 0.92f)
+                    .alpha(sunAlpha * 0.7f),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Canvas(modifier = Modifier.size(90.dp)) {
+                    val r = size.minDimension / 2f
+                    val c = Offset(r, r)
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFE8B84A).copy(alpha = 0.28f),
+                                Color(0xFFD4AF37).copy(alpha = 0.12f),
+                                Color.Transparent
+                            ),
+                            center = c,
+                            radius = r
+                        )
+                    )
+                }
+            }
+        }
+        PrayerPhase.DAWN -> {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(top = 56.dp)
+                    .scale(sunScale * 0.85f)
+                    .alpha(sunAlpha * 0.5f),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Canvas(modifier = Modifier.size(70.dp)) {
+                    val r = size.minDimension / 2f
+                    val c = Offset(r, r)
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFF5E6A3).copy(alpha = 0.22f),
+                                Color.Transparent
+                            ),
+                            center = c,
+                            radius = r
+                        )
+                    )
+                }
+            }
+        }
+        PrayerPhase.SUNSET, PrayerPhase.NIGHT -> { /* Akşam/gece: sadece gradyan */ }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -192,10 +599,10 @@ private fun HomeTopBar(onSettingsClick: () -> Unit) {
         },
         actions = {
             IconButton(onClick = onSettingsClick) {
-                Icon(
-                    imageVector        = Icons.Outlined.Settings,
+                Image(
+                    painter         = painterResource(R.drawable.icon_ayarlar),
                     contentDescription = "Ayarlar",
-                    tint               = MaterialTheme.colorScheme.onSurface
+                    modifier        = Modifier.size(28.dp)
                 )
             }
         },
@@ -463,19 +870,19 @@ private fun FeatureGrid(
     ) {
         FeatureCard(
             modifier    = Modifier.weight(1f),
-            iconResId   = R.drawable.kible,
+            iconResId   = R.drawable.icon_kible,
             label       = strings.navQibla,
             onClick     = onQiblaClick
         )
         FeatureCard(
             modifier    = Modifier.weight(1f),
-            icon        = Icons.Outlined.AccessTime,
+            iconResId   = R.drawable.icon_namaz,
             label       = strings.navPrayerTimes,
             onClick     = onPrayerTimesClick
         )
         FeatureCard(
             modifier    = Modifier.weight(1f),
-            icon        = Icons.Outlined.FavoriteBorder,
+            iconResId   = R.drawable.icon_tespih,
             label       = strings.navDhikr,
             onClick     = onDhikrClick
         )
@@ -511,7 +918,7 @@ private fun FeatureCard(
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(52.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
@@ -520,14 +927,14 @@ private fun FeatureCard(
                     Image(
                         painter = painterResource(iconResId),
                         contentDescription = null,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(28.dp)
                     )
                 } else {
                     Icon(
                         imageVector        = icon!!,
                         contentDescription = null,
                         tint               = MaterialTheme.colorScheme.primary,
-                        modifier           = Modifier.size(22.dp)
+                        modifier           = Modifier.size(28.dp)
                     )
                 }
             }

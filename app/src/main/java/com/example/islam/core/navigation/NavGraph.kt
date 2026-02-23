@@ -1,9 +1,12 @@
 package com.example.islam.core.navigation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.delay
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -17,6 +20,8 @@ import com.example.islam.presentation.prayer.PrayerScreen
 import com.example.islam.presentation.qibla.QiblaScreen
 import com.example.islam.presentation.quran.QuranScreen
 import com.example.islam.presentation.quran.SurahReaderScreen
+import com.example.islam.presentation.ramadan.RamadanPlannerScreen
+import com.example.islam.presentation.auth.GoogleAuthScreen
 import com.example.islam.presentation.settings.SettingsScreen
 
 @Composable
@@ -26,10 +31,28 @@ fun NavGraph(
 ) {
     // Onboarding tamamlandı mı? null = henüz DataStore'dan okumadık (splash bekleme durumu)
     val onboardingDone by prefsDataStore.onboardingCompleted.collectAsState(initial = null)
+    var fallbackToOnboarding by remember { mutableStateOf(false) }
 
-    // DataStore henüz yanıt vermediyse boş kutu göster (genellikle <1 frame)
-    if (onboardingDone == null) {
-        Box(modifier = Modifier.fillMaxSize())
+    LaunchedEffect(onboardingDone) {
+        if (onboardingDone != null) {
+            fallbackToOnboarding = false
+            return@LaunchedEffect
+        }
+        delay(1800)
+        if (onboardingDone == null) {
+            fallbackToOnboarding = true
+        }
+    }
+
+    // DataStore gecikirse ekranda takılmış hissi vermemek için spinner göster.
+    if (onboardingDone == null && !fallbackToOnboarding) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .wrapContentSize()
+        ) {
+            CircularProgressIndicator(modifier = Modifier)
+        }
         return
     }
 
@@ -72,6 +95,9 @@ fun NavGraph(
         composable(Screen.PrayerTimes.route) {
             PrayerScreen(navController = navController)
         }
+        composable(Screen.RamadanPlanner.route) {
+            RamadanPlannerScreen(navController = navController)
+        }
         composable(Screen.Dhikr.route) {
             DhikrScreen()
         }
@@ -79,7 +105,10 @@ fun NavGraph(
             QiblaScreen(navController = navController)
         }
         composable(Screen.Settings.route) {
-            SettingsScreen()
+            SettingsScreen(navController = navController)
+        }
+        composable(Screen.GoogleAuth.route) {
+            GoogleAuthScreen(navController = navController)
         }
     }
 }
