@@ -126,35 +126,40 @@ fun HomeScreen(
                 time     = pt.fajr.cleanTime(),
                 icon     = androidx.compose.material.icons.Icons.Outlined.DarkMode,
                 iconTint = Color.White,
-                isActive = activePrayerName == "fajr"
+                isActive = activePrayerName == "fajr",
+                iconResId = R.drawable.icon_sabah
             ),
             PrayerDisplayItem(
                 name     = "Öğle",
                 time     = pt.dhuhr.cleanTime(),
                 icon     = androidx.compose.material.icons.Icons.Outlined.WbSunny,
                 iconTint = Color(0xFFD4AF37),
-                isActive = activePrayerName == "dhuhr"
+                isActive = activePrayerName == "dhuhr",
+                iconResId = R.drawable.icon_ogle
             ),
             PrayerDisplayItem(
                 name     = "İkindi",
                 time     = pt.asr.cleanTime(),
                 icon     = androidx.compose.material.icons.Icons.Outlined.WbTwilight,
                 iconTint = Color(0xFFD4AF37),
-                isActive = activePrayerName == "asr"
+                isActive = activePrayerName == "asr",
+                iconResId = R.drawable.icon_ikindi
             ),
             PrayerDisplayItem(
                 name     = "Akşam",
                 time     = pt.maghrib.cleanTime(),
                 icon     = androidx.compose.material.icons.Icons.Outlined.WbTwilight,
                 iconTint = Color(0xFFFB923C),
-                isActive = activePrayerName == "maghrib"
+                isActive = activePrayerName == "maghrib",
+                iconResId = R.drawable.icon_aksam
             ),
             PrayerDisplayItem(
                 name     = "Yatsı",
                 time     = pt.isha.cleanTime(),
                 icon     = androidx.compose.material.icons.Icons.Outlined.Brightness2,
                 iconTint = Color(0xFFA5B4FC),
-                isActive = activePrayerName == "isha"
+                isActive = activePrayerName == "isha",
+                iconResId = R.drawable.icon_yatsi
             )
         )
     } ?: defaultPrayerItems()
@@ -192,10 +197,10 @@ private fun HomeTopBar(onSettingsClick: () -> Unit) {
         },
         actions = {
             IconButton(onClick = onSettingsClick) {
-                Icon(
-                    imageVector        = Icons.Outlined.Settings,
+                Image(
+                    painter         = painterResource(R.drawable.icon_ayarlar),
                     contentDescription = "Ayarlar",
-                    tint               = MaterialTheme.colorScheme.onSurface
+                    modifier        = Modifier.size(28.dp)
                 )
             }
         },
@@ -463,19 +468,19 @@ private fun FeatureGrid(
     ) {
         FeatureCard(
             modifier    = Modifier.weight(1f),
-            iconResId   = R.drawable.kible,
+            iconResId   = R.drawable.icon_kible,
             label       = strings.navQibla,
             onClick     = onQiblaClick
         )
         FeatureCard(
             modifier    = Modifier.weight(1f),
-            icon        = Icons.Outlined.AccessTime,
+            iconResId   = R.drawable.icon_namaz,
             label       = strings.navPrayerTimes,
             onClick     = onPrayerTimesClick
         )
         FeatureCard(
             modifier    = Modifier.weight(1f),
-            icon        = Icons.Outlined.FavoriteBorder,
+            iconResId   = R.drawable.icon_tespih,
             label       = strings.navDhikr,
             onClick     = onDhikrClick
         )
@@ -511,7 +516,7 @@ private fun FeatureCard(
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(52.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
@@ -520,14 +525,14 @@ private fun FeatureCard(
                     Image(
                         painter = painterResource(iconResId),
                         contentDescription = null,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(28.dp)
                     )
                 } else {
                     Icon(
                         imageVector        = icon!!,
                         contentDescription = null,
                         tint               = MaterialTheme.colorScheme.primary,
-                        modifier           = Modifier.size(22.dp)
+                        modifier           = Modifier.size(28.dp)
                     )
                 }
             }

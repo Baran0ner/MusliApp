@@ -20,13 +20,14 @@ data class JuzListModel(
     val displayName: String
 )
 
-/** Single verse for reader */
+/** Single verse for reader. surahNumber set only for juz (each verse can be from different surah). */
 data class VerseModel(
     val numberInSurah: Int,
     val arabic: String,
     val transliteration: String,
     val translation: String,
-    val globalNumber: Int
+    val globalNumber: Int,
+    val surahNumber: Int? = null
 )
 
 /** Reader context: surah or juz */

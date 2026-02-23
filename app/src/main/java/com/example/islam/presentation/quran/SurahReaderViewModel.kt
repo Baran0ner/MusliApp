@@ -140,6 +140,10 @@ class SurahReaderViewModel @Inject constructor(
                             isLoading = false,
                             error = null
                         )
+                        if (verses.isNotEmpty()) {
+                            val verseList = verses.map { (it.surahNumber ?: 1) to it.numberInSurah }
+                            audioPlayer.preparePlaylistFromVerseList(verseList, "Cüz $juzNum")
+                        }
                     }
                 }
                 .onFailure { e ->

@@ -24,7 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
@@ -60,12 +59,12 @@ data class BottomNavItem(
 )
 
 private val bottomNavItems = listOf(
-    BottomNavItem(Screen.Home,        { it.navHome },        Icons.Default.Home),
-    BottomNavItem(Screen.Quran,       { it.navQuran },       Icons.Outlined.MenuBook),
-    BottomNavItem(Screen.PrayerTimes, { it.navPrayerTimes }, Icons.Outlined.Schedule),
-    BottomNavItem(Screen.Dhikr,       { it.navDhikr },       Icons.Outlined.Favorite),
-    BottomNavItem(Screen.Qibla,       { it.navQibla },       iconResId = R.drawable.kible),
-    BottomNavItem(Screen.Settings,    { it.navSettings },    Icons.Outlined.Settings)
+    BottomNavItem(Screen.Home,        { it.navHome },        iconResId = R.drawable.icon_anasayfa),
+    BottomNavItem(Screen.Quran,       { it.navQuran },       iconResId = R.drawable.icon_kuran),
+    BottomNavItem(Screen.PrayerTimes, { it.navPrayerTimes }, iconResId = R.drawable.icon_namaz),
+    BottomNavItem(Screen.Dhikr,       { it.navDhikr },       iconResId = R.drawable.icon_tespih),
+    BottomNavItem(Screen.Qibla,       { it.navQibla },       iconResId = R.drawable.icon_kible),
+    BottomNavItem(Screen.Settings,    { it.navSettings },    iconResId = R.drawable.icon_ayarlar)
 )
 
 // ─── Activity ─────────────────────────────────────────────────────────────────
@@ -223,7 +222,7 @@ private fun NavMenuItem(
 
     // İkon boyutu — aktif item'da hafif büyür
     val iconSize by animateDpAsState(
-        targetValue   = if (isSelected) 24.dp else 22.dp,
+        targetValue   = if (isSelected) 28.dp else 26.dp,
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label         = "iconSize_${item.screen.route}"
     )
@@ -242,7 +241,7 @@ private fun NavMenuItem(
     ) {
         // İkon — bounce graphicsLayer ile
         Box(
-            modifier         = Modifier.size(26.dp),
+            modifier         = Modifier.size(32.dp),
             contentAlignment = Alignment.Center
         ) {
             if (item.iconResId != null) {
@@ -251,8 +250,7 @@ private fun NavMenuItem(
                         Image(
                             painter            = painterResource(item.iconResId),
                             contentDescription = label,
-                            modifier           = Modifier.size(iconSize),
-                            colorFilter        = ColorFilter.tint(iconColor)
+                            modifier           = Modifier.size(iconSize)
                         )
                     }
                 ) { measurables, constraints ->

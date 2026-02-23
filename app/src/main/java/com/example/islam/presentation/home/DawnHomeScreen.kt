@@ -30,7 +30,6 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -63,7 +62,8 @@ data class PrayerDisplayItem(
     val time: String,
     val icon: ImageVector,
     val iconTint: Color,
-    val isActive: Boolean = false
+    val isActive: Boolean = false,
+    val iconResId: Int? = null
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -287,17 +287,16 @@ private fun KibleButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
         ) {
             Box(
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
                     .background(RefSurfaceCard)
                     .border(1.dp, RefBorderPrimary40, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
-                    painter = painterResource(R.drawable.ic_kaaba),
+                    painter = painterResource(R.drawable.icon_kible),
                     contentDescription = "Kıble",
-                    modifier = Modifier.size(18.dp),
-                    colorFilter = ColorFilter.tint(RefPrimary)
+                    modifier = Modifier.size(24.dp)
                 )
             }
             Spacer(Modifier.width(12.dp))
@@ -330,17 +329,16 @@ private fun TespihButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     ) {
         Box(
             modifier = Modifier
-                .size(32.dp)
+                .size(40.dp)
                 .clip(CircleShape)
                 .background(RefSurfaceCard)
                 .border(1.dp, RefBorderPrimary40, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Image(
-                painter = painterResource(R.drawable.ic_tesbih),
+                painter = painterResource(R.drawable.icon_tespih),
                 contentDescription = "Tespih",
-                modifier = Modifier.size(18.dp),
-                colorFilter = ColorFilter.tint(RefPrimary)
+                modifier = Modifier.size(24.dp)
             )
         }
         Spacer(Modifier.width(12.dp))
@@ -386,12 +384,22 @@ private fun PrayerTimeChip(item: PrayerDisplayItem) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = item.icon,
-            contentDescription = item.name,
-            tint = if (item.isActive) RefPrimary else RefTextGray400,
-            modifier = Modifier.size(20.dp)
-        )
+        if (item.iconResId != null) {
+            Image(
+                painter = painterResource(item.iconResId),
+                contentDescription = item.name,
+                modifier = Modifier
+                    .size(28.dp)
+                    .then(if (item.isActive) Modifier else Modifier.alpha(0.45f))
+            )
+        } else {
+            Icon(
+                imageVector = item.icon,
+                contentDescription = item.name,
+                tint = if (item.isActive) RefPrimary else RefTextGray400,
+                modifier = Modifier.size(24.dp)
+            )
+        }
         Spacer(Modifier.height(6.dp))
         Text(
             text = item.name.uppercase(),
@@ -426,35 +434,40 @@ fun defaultPrayerItems() = listOf(
         time = "06:19",
         icon = Icons.Outlined.DarkMode,
         iconTint = RefPrimary,
-        isActive = true
+        isActive = true,
+        iconResId = R.drawable.icon_sabah
     ),
     PrayerDisplayItem(
         name = "Öğle",
         time = "13:23",
         icon = Icons.Outlined.WbSunny,
         iconTint = RefTextGray400,
-        isActive = false
+        isActive = false,
+        iconResId = R.drawable.icon_ogle
     ),
     PrayerDisplayItem(
         name = "İkindi",
         time = "16:21",
         icon = Icons.Outlined.WbTwilight,
         iconTint = RefTextGray400,
-        isActive = false
+        isActive = false,
+        iconResId = R.drawable.icon_ikindi
     ),
     PrayerDisplayItem(
         name = "Akşam",
         time = "18:53",
         icon = Icons.Outlined.WbTwilight,
         iconTint = RefTextGray400,
-        isActive = false
+        isActive = false,
+        iconResId = R.drawable.icon_aksam
     ),
     PrayerDisplayItem(
         name = "Yatsı",
         time = "20:12",
         icon = Icons.Outlined.Brightness2,
         iconTint = RefTextGray400,
-        isActive = false
+        isActive = false,
+        iconResId = R.drawable.icon_yatsi
     )
 )
 

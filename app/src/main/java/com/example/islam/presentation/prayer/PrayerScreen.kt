@@ -2,6 +2,7 @@ package com.example.islam.presentation.prayer
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,9 +32,11 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.islam.R
 import androidx.navigation.NavController
 import com.example.islam.core.i18n.LocalStrings
 import com.example.islam.core.navigation.Screen
@@ -300,10 +303,10 @@ private fun PrayerHeader(
                     onClick = onSettingsClick,
                     modifier = Modifier.size(40.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Settings,
+                    Image(
+                        painter = painterResource(R.drawable.icon_ayarlar),
                         contentDescription = "Ayarlar",
-                        tint = RefTextSecondary
+                        modifier = Modifier.size(28.dp)
                     )
                 }
                 Text(
