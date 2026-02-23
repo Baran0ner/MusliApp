@@ -2,6 +2,7 @@ package com.example.islam.presentation.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.islam.data.datastore.UserPreferencesDataStore
 import com.example.islam.data.repository.FirebaseRepository
 import com.google.firebase.auth.FirebaseUser
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,7 +22,8 @@ sealed class AuthState {
 
 @HiltViewModel
 class GoogleAuthViewModel @Inject constructor(
-    private val firebaseRepository: FirebaseRepository
+    private val firebaseRepository: FirebaseRepository,
+    private val prefsDataStore: UserPreferencesDataStore
 ) : ViewModel() {
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)
@@ -35,6 +37,9 @@ class GoogleAuthViewModel @Inject constructor(
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             val result = firebaseRepository.signInWithGoogle(idToken)
+            result.getOrNull()?.let { user ->
+                prefsDataStore.seedDisplayNameIfEmpty(user.displayName)
+            }
             _authState.value = result.fold(
                 onSuccess = { AuthState.Success(it) },
                 onFailure = { AuthState.Error(it.message ?: "Giriş başarısız") }

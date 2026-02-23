@@ -1,5 +1,10 @@
 package com.example.islam.presentation.dhikr
 
+import android.content.Context
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -33,11 +38,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.islam.core.i18n.LocalStrings
 import com.example.islam.domain.model.Dhikr
 import com.example.islam.domain.model.DhikrDay
@@ -60,9 +67,18 @@ private val ChipActive = Color(0xFF1E4A2E)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DhikrScreen(viewModel: DhikrViewModel = hiltViewModel()) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val dhikr = state.selectedDhikr
     val strings = LocalStrings.current
+    val (tickHaptic, completeHaptic) = rememberDhikrHaptics()
+    var previousCycleCount by remember { mutableIntStateOf(state.cycleCount) }
+
+    LaunchedEffect(state.cycleCount) {
+        if (state.cycleCount > previousCycleCount) {
+            completeHaptic()
+        }
+        previousCycleCount = state.cycleCount
+    }
 
     Box(
         modifier = Modifier
@@ -142,7 +158,12 @@ fun DhikrScreen(viewModel: DhikrViewModel = hiltViewModel()) {
                 count       = dhikr?.count ?: 0,
                 target      = dhikr?.targetCount ?: 33,
                 celebrating = state.isCelebrating,
-                onClick     = { if (dhikr != null) viewModel.increment() }
+                onClick     = {
+                    if (dhikr != null) {
+                        tickHaptic()
+                        viewModel.increment()
+                    }
+                }
             )
 
             Spacer(Modifier.height(24.dp))
@@ -207,6 +228,69 @@ fun DhikrScreen(viewModel: DhikrViewModel = hiltViewModel()) {
             }
         }
     }
+}
+
+@Composable
+private fun rememberDhikrHaptics(): Pair<() -> Unit, () -> Unit> {
+    val context = LocalContext.current
+    val vibrator = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+    }
+
+    val tick: () -> Unit = tick@{
+        val deviceVibrator = vibrator ?: return@tick
+        if (!deviceVibrator.hasVibrator()) return@tick
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
+                deviceVibrator.vibrate(
+                    VibrationEffect.startComposition()
+                        .addPrimitive(VibrationEffect.Composition.PRIMITIVE_TICK, 0.45f)
+                        .compose()
+                )
+            }
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
+                deviceVibrator.vibrate(
+                    VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
+                )
+            }
+            else -> {
+                deviceVibrator.vibrate(
+                    VibrationEffect.createOneShot(12L, 90)
+                )
+            }
+        }
+    }
+
+    val complete: () -> Unit = complete@{
+        val deviceVibrator = vibrator ?: return@complete
+        if (!deviceVibrator.hasVibrator()) return@complete
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
+                deviceVibrator.vibrate(
+                    VibrationEffect.startComposition()
+                        .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1f)
+                        .addPrimitive(VibrationEffect.Composition.PRIMITIVE_QUICK_RISE, 0.75f)
+                        .compose()
+                )
+            }
+            else -> {
+                deviceVibrator.vibrate(
+                    VibrationEffect.createWaveform(
+                        longArrayOf(0L, 30L, 30L, 40L),
+                        intArrayOf(0, 170, 0, 210),
+                        -1
+                    )
+                )
+            }
+        }
+    }
+
+    return tick to complete
 }
 
 // ─── Başlık ───────────────────────────────────────────────────────────────────

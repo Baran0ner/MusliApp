@@ -18,7 +18,16 @@ class OnboardingViewModel @Inject constructor(
      */
     fun completeOnboarding() {
         viewModelScope.launch {
-            prefsDataStore.setOnboardingCompleted()
+            // Onboarding tamamlayıp Home'a geçen kullanıcılar için tekrar isim kartı gösterme.
+            prefsDataStore.setOnboardingCompleted(suppressNamePrompt = true)
         }
+    }
+
+    fun saveDisplayName(name: String) {
+        viewModelScope.launch { prefsDataStore.updateDisplayName(name) }
+    }
+
+    fun seedDisplayNameIfEmpty(name: String?) {
+        viewModelScope.launch { prefsDataStore.seedDisplayNameIfEmpty(name) }
     }
 }

@@ -1,7 +1,14 @@
 package com.example.islam.presentation.prayer
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -28,15 +35,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.islam.R
 import androidx.navigation.NavController
 import com.example.islam.core.i18n.LocalStrings
@@ -47,6 +59,10 @@ import com.example.islam.domain.model.PrayerType
 import com.example.islam.domain.model.WeekDay
 import com.example.islam.domain.model.timeFor
 import com.example.islam.core.util.DateUtil.cleanTime
+import com.example.islam.ui.theme.AmiriFamily
+import kotlinx.coroutines.delay
+import kotlin.math.pow
+import kotlin.random.Random
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -63,6 +79,14 @@ private val RefBorderPrimary40 = Color(0x66d4af35)
 private val RefBorderPrimary60 = Color(0x99d4af35)
 private val RefBorderWhite5 = Color(0x0DFFFFFF)
 private val RefBorderWhite10 = Color(0x1AFFFFFF)
+private val RefPrimary70 = Color(0xB3d4af35)
+private val ConfettiPalette = listOf(
+    RefPrimary,
+    Color(0xFFE7C565),
+    Color(0xFF8FD3B6),
+    Color(0xFF74B49B),
+    Color(0xFFF4E5A3)
+)
 
 private val TRACKABLE_PRAYERS = listOf(
     Prayer.FAJR, Prayer.DHUHR, Prayer.ASR, Prayer.MAGHRIB, Prayer.ISHA
@@ -74,9 +98,20 @@ fun PrayerScreen(
     navController: NavController,
     viewModel: PrayerViewModel = hiltViewModel()
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = LocalStrings.current
     val listState = rememberLazyListState()
+    var celebrationEvent by remember { mutableStateOf<StreakCelebrationEvent?>(null) }
+    var celebrationTick by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        viewModel.celebrationEvents.collect { event ->
+            celebrationEvent = event
+            celebrationTick += 1
+            delay(2200)
+            celebrationEvent = null
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -88,7 +123,7 @@ fun PrayerScreen(
             PrayerHeader(
                 strings = strings,
                 onSettingsClick = { navController.navigate(Screen.Settings.route) },
-                onCalendarClick = { }
+                onCalendarClick = { navController.navigate(Screen.RamadanPlanner.route) }
             )
 
             when {
@@ -294,6 +329,30 @@ fun PrayerScreen(
                 )
             }
         }
+
+        AnimatedVisibility(
+            visible = celebrationEvent != null,
+            enter = fadeIn(animationSpec = tween(220)) + scaleIn(
+                animationSpec = tween(280),
+                initialScale = 0.88f
+            ),
+            exit = fadeOut(animationSpec = tween(220)) + scaleOut(
+                animationSpec = tween(240),
+                targetScale = 0.92f
+            ),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = 24.dp)
+        ) {
+            val event = celebrationEvent
+            if (event != null) {
+                StreakCelebrationOverlay(
+                    streak = event.streak,
+                    goal = event.goal,
+                    triggerKey = celebrationTick
+                )
+            }
+        }
     }
 }
 
@@ -468,8 +527,192 @@ private fun PrayerCheckbox(
 }
 
 @Composable
+private fun TasbihGlyph(
+    total: Int,
+    filled: Int
+) {
+    val beads = total.coerceIn(1, 5)
+    val filledCount = filled.coerceIn(0, beads)
+    Canvas(
+        modifier = Modifier
+            .width(70.dp)
+            .height(28.dp)
+    ) {
+        val start = Offset(6f, size.height * 0.7f)
+        val end = Offset(size.width - 6f, size.height * 0.7f)
+        val control = Offset(size.width * 0.5f, size.height * 0.1f)
+
+        val rope = Path().apply {
+            moveTo(start.x, start.y)
+            quadraticBezierTo(control.x, control.y, end.x, end.y)
+        }
+        drawPath(
+            path = rope,
+            color = RefBorderPrimary40,
+            style = Stroke(width = 2.4f, cap = StrokeCap.Round)
+        )
+
+        for (i in 0 until beads) {
+            val t = if (beads == 1) 0.5f else i.toFloat() / (beads - 1).toFloat()
+            val pos = quadBezierPoint(start, control, end, t)
+            val isFilled = i < filledCount
+            val radius = if (i == filledCount - 1 && filledCount > 0) 4.6f else 3.6f
+            drawCircle(
+                color = if (isFilled) RefPrimary else RefBorderPrimary40,
+                radius = radius,
+                center = pos
+            )
+            drawCircle(
+                color = RefBorderPrimary30,
+                radius = radius,
+                center = pos,
+                style = Stroke(width = 1.2f)
+            )
+        }
+
+        val tasselX = end.x
+        drawLine(
+            color = RefPrimary70,
+            start = Offset(tasselX, end.y + 2f),
+            end = Offset(tasselX, end.y + 9f),
+            strokeWidth = 2.2f,
+            cap = StrokeCap.Round
+        )
+    }
+}
+
+private fun quadBezierPoint(p0: Offset, p1: Offset, p2: Offset, t: Float): Offset {
+    val oneMinus = 1f - t
+    val x = oneMinus * oneMinus * p0.x + 2f * oneMinus * t * p1.x + t * t * p2.x
+    val y = oneMinus * oneMinus * p0.y + 2f * oneMinus * t * p1.y + t * t * p2.y
+    return Offset(x, y)
+}
+
+@Composable
+private fun StreakCelebrationOverlay(
+    streak: Int,
+    goal: Int,
+    triggerKey: Int
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        RefCardGreen.copy(alpha = 0.98f),
+                        RefDeepGreen.copy(alpha = 0.98f)
+                    )
+                )
+            )
+            .border(1.dp, RefBorderPrimary40, RoundedCornerShape(24.dp))
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        CelebrationConfetti(
+            triggerKey = triggerKey,
+            modifier = Modifier.matchParentSize()
+        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Tebrikler",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = RefPrimary
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Streak $streak oldu",
+                fontSize = 26.sp,
+                fontFamily = AmiriFamily,
+                fontWeight = FontWeight.Bold,
+                color = RefWhite
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Bugünkü hedef tamamlandı ($goal/$goal)",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = RefTextSecondary
+            )
+            Spacer(Modifier.height(10.dp))
+            TasbihGlyph(total = goal, filled = goal)
+        }
+    }
+}
+
+private data class ConfettiParticle(
+    val startX: Float,
+    val drift: Float,
+    val baseSize: Float,
+    val color: Color,
+    val delay: Float,
+    val isCircle: Boolean,
+    val startRotation: Float
+)
+
+@Composable
+private fun CelebrationConfetti(
+    triggerKey: Int,
+    modifier: Modifier = Modifier
+) {
+    val particles = remember(triggerKey) {
+        val random = Random(triggerKey * 97 + 19)
+        List(64) {
+            ConfettiParticle(
+                startX = random.nextFloat().coerceIn(0.04f, 0.96f),
+                drift = (random.nextFloat() - 0.5f) * 0.36f,
+                baseSize = 5f + random.nextFloat() * 4f,
+                color = ConfettiPalette[random.nextInt(ConfettiPalette.size)],
+                delay = random.nextFloat() * 0.22f,
+                isCircle = random.nextBoolean(),
+                startRotation = random.nextFloat() * 360f
+            )
+        }
+    }
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(triggerKey) {
+        progress.snapTo(0f)
+        progress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 1250, easing = FastOutSlowInEasing)
+        )
+    }
+
+    Canvas(modifier = modifier) {
+        val p = progress.value
+        particles.forEach { particle ->
+            val life = ((p - particle.delay) / (1f - particle.delay)).coerceIn(0f, 1f)
+            if (life <= 0f) return@forEach
+
+            val x = size.width * particle.startX + size.width * particle.drift * life
+            val y = size.height * 0.08f + size.height * 0.74f * life.pow(1.18f)
+            val alpha = (1f - life).coerceIn(0f, 1f) * 0.92f
+            val drawColor = particle.color.copy(alpha = alpha)
+            val drawSize = particle.baseSize * (1f - life * 0.24f)
+            val center = Offset(x, y)
+
+            if (particle.isCircle) {
+                drawCircle(color = drawColor, radius = drawSize, center = center)
+            } else {
+                rotate(degrees = particle.startRotation + life * 220f, pivot = center) {
+                    drawRect(
+                        color = drawColor,
+                        topLeft = Offset(center.x - drawSize, center.y - drawSize),
+                        size = Size(drawSize * 2f, drawSize * 2f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun WeeklyHistorySection(viewModel: PrayerViewModel) {
-    val days by viewModel.weeklyHistoryFlow.collectAsState(initial = emptyList())
+    val days by viewModel.weeklyHistoryFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     if (days.isNotEmpty()) {
         Spacer(Modifier.height(8.dp))
         WeeklyStatusCard(

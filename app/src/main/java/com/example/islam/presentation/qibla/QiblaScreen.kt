@@ -23,6 +23,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.islam.core.i18n.LocalStrings
 import kotlin.math.PI
@@ -59,13 +61,15 @@ fun QiblaScreen(
     navController: NavController,
     viewModel: QiblaViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = LocalStrings.current
 
     // bearingToQibla: cihazın şu an hangi açıda döndüğünü hesaba katarak
     // kullanıcının kıbleye ulaşmak için döndürmesi gereken gerçek açıdır.
     // qiblaAngle ise sadece Kabe'nin coğrafi kuzeyden sabit açısıdır — asla değişmez.
     val rawBearing = uiState.compass?.bearingToQibla ?: 0f
+    val pitch = uiState.compass?.pitch ?: 0f
+    val roll = uiState.compass?.roll ?: 0f
 
     val alignErrorDeg = angularDistanceToZero(rawBearing)
     val isAligned = alignErrorDeg <= 3f
@@ -150,14 +154,24 @@ fun QiblaScreen(
             }
         }
         else -> {
-            QiblaContent(qiblaDegrees = animatedBearing, isAligned = isAligned)
+            QiblaContent(
+                qiblaDegrees = animatedBearing,
+                isAligned = isAligned,
+                tiltPitch = pitch,
+                tiltRoll = roll
+            )
         }
     }
 }
 
 // ─── İçerik ───────────────────────────────────────────────────────────────────
 @Composable
-private fun QiblaContent(qiblaDegrees: Float, isAligned: Boolean) {
+private fun QiblaContent(
+    qiblaDegrees: Float,
+    isAligned: Boolean,
+    tiltPitch: Float,
+    tiltRoll: Float
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -190,7 +204,12 @@ private fun QiblaContent(qiblaDegrees: Float, isAligned: Boolean) {
         ) {
             QiblaHeader()
             Spacer(Modifier.weight(1f))
-            CompassDial(arrowRotationDeg = qiblaDegrees, isAligned = isAligned)
+            CompassDial(
+                arrowRotationDeg = qiblaDegrees,
+                isAligned = isAligned,
+                tiltPitch = tiltPitch,
+                tiltRoll = tiltRoll
+            )
             Spacer(Modifier.height(28.dp))
             QiblaLabel(isAligned = isAligned)
             Spacer(Modifier.weight(1f))
@@ -294,7 +313,12 @@ private fun QiblaLabel(isAligned: Boolean) {
 
 // ─── Pusula ───────────────────────────────────────────────────────────────────
 @Composable
-private fun CompassDial(arrowRotationDeg: Float, isAligned: Boolean) {
+private fun CompassDial(
+    arrowRotationDeg: Float,
+    isAligned: Boolean,
+    tiltPitch: Float,
+    tiltRoll: Float
+) {
     val dialSize = 280.dp
     val transition = rememberInfiniteTransition(label = "qiblaGlow")
     val glowAlpha by transition.animateFloat(
@@ -317,7 +341,14 @@ private fun CompassDial(arrowRotationDeg: Float, isAligned: Boolean) {
     )
 
     Box(
-        modifier = Modifier.size(dialSize),
+        modifier = Modifier
+            .size(dialSize)
+            .graphicsLayer {
+                rotationX = tiltPitch.coerceIn(-8f, 8f)
+                rotationY = (-tiltRoll).coerceIn(-8f, 8f)
+                cameraDistance = 18f * density
+                shadowElevation = if (isAligned) 14.dp.toPx() else 8.dp.toPx()
+            },
         contentAlignment = Alignment.Center
     ) {
         if (isAligned) {
@@ -656,6 +687,11 @@ private fun DrawScope.drawSquareDiamond(cx: Float, cy: Float, r: Float, color: C
 @Composable
 private fun QiblaPreview() {
     MaterialTheme {
-        QiblaContent(qiblaDegrees = 147f, isAligned = true)
+        QiblaContent(
+            qiblaDegrees = 147f,
+            isAligned = true,
+            tiltPitch = 2f,
+            tiltRoll = -1.5f
+        )
     }
 }

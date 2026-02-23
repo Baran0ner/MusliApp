@@ -9,8 +9,21 @@ interface PrayerTimeDao {
 
     // ── Tekil okuma ──────────────────────────────────────────────────────────
 
-    @Query("SELECT * FROM prayer_times WHERE date = :date AND city = :city LIMIT 1")
-    suspend fun getPrayerTimeByDate(date: String, city: String): PrayerTimeEntity?
+    @Query(
+        """
+        SELECT * FROM prayer_times
+        WHERE date = :date AND city = :city AND country = :country
+          AND method = :method AND school = :school
+        LIMIT 1
+        """
+    )
+    suspend fun getPrayerTimeByDate(
+        date: String,
+        city: String,
+        country: String,
+        method: Int,
+        school: Int
+    ): PrayerTimeEntity?
 
     // ── Ay cache kontrolü ────────────────────────────────────────────────────
 
@@ -18,8 +31,22 @@ interface PrayerTimeDao {
      * O aya ait kaç kayıt var?
      * ≥ 28 ise ay tamamen önbellekte sayılır, API'ye gidilmez.
      */
-    @Query("SELECT COUNT(*) FROM prayer_times WHERE month = :month AND year = :year AND city = :city")
-    suspend fun countForMonth(month: Int, year: Int, city: String): Int
+    @Query(
+        """
+        SELECT COUNT(*) FROM prayer_times
+        WHERE month = :month AND year = :year
+          AND city = :city AND country = :country
+          AND method = :method AND school = :school
+        """
+    )
+    suspend fun countForMonth(
+        month: Int,
+        year: Int,
+        city: String,
+        country: String,
+        method: Int,
+        school: Int
+    ): Int
 
     // ── Yazma ────────────────────────────────────────────────────────────────
 
@@ -34,6 +61,24 @@ interface PrayerTimeDao {
 
     @Query("SELECT * FROM prayer_times WHERE city = :city ORDER BY date DESC")
     fun getPrayerTimesFlow(city: String): Flow<List<PrayerTimeEntity>>
+
+    @Query(
+        """
+        SELECT * FROM prayer_times
+        WHERE month = :month AND year = :year
+          AND city = :city AND country = :country
+          AND method = :method AND school = :school
+        ORDER BY substr(date, 7, 4) || substr(date, 4, 2) || substr(date, 1, 2) ASC
+        """
+    )
+    fun observeMonth(
+        month: Int,
+        year: Int,
+        city: String,
+        country: String,
+        method: Int,
+        school: Int
+    ): Flow<List<PrayerTimeEntity>>
 
     // ── Temizlik ─────────────────────────────────────────────────────────────
 

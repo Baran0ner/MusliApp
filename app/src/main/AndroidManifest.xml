@@ -6,9 +6,11 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" /> <!-- Location (GPS-based prayer times) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" /> <!-- Notifications (Android 13+) -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" /> <!-- Exact Alarm for ezan -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Exact Alarm permissions -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" /> <!-- Pil optimizasyonundan muaf tut (Xiaomi/Huawei/Oppo gibi OEM'lerde ezan için) -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" /> <!-- Re-schedule alarms after reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" /> <!-- Wake lock for WorkManager -->
     <uses-permission android:name="android.permission.WAKE_LOCK" /> <!-- Foreground Service (API 28+) -->
@@ -30,6 +32,16 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Islam"
         tools:targetApi="31">
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_kaaba" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/fcm_default_notification_color" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="channel_general_announcements" />
+
         <!-- WorkManager: Hilt ile başlatıldığı için varsayılan initializer kapatılır -->
         <provider
             android:name="androidx.startup.InitializationProvider"
@@ -96,7 +108,7 @@
 
         <!-- Firebase Cloud Messaging — Ramazan bildirimleri, genel duyurular -->
         <service
-            android:name=".services.MusliAppFirebaseMessagingService"
+            android:name=".services.MyFirebaseMessagingService"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />

@@ -8,8 +8,12 @@ import com.example.islam.data.mapper.toDomain
 import com.example.islam.data.remote.api.AladhanApi
 import com.example.islam.domain.model.PrayerTime
 import com.example.islam.domain.repository.PrayerTimeRepository
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 import java.util.Calendar
 import javax.inject.Inject
 
@@ -26,9 +30,6 @@ class PrayerTimeRepositoryImpl @Inject constructor(
      *    a. Başarılıysa → insertAll() ile hepsini DB'ye yaz, geçmiş ayları temizle, bugünü döndür
      *    b. Hata varsa → DB'de yine de bugün var mı? Varsa stale fallback döndür
      *    c. DB'de de bugün yoksa → Resource.Error
-     *
-     * NOT: method/school değiştiğinde cache'i otomatik geçersiz kılmıyoruz.
-     * Refresh butonu veya ayın değişmesi cache'i temizler.
      */
     override suspend fun getPrayerTimes(
         city: String,
@@ -38,14 +39,27 @@ class PrayerTimeRepositoryImpl @Inject constructor(
         date: String?
     ): Resource<PrayerTime> {
         val queryDate = date ?: DateUtil.todayFormatted()
-        val cal       = Calendar.getInstance()
-        val month     = cal.get(Calendar.MONTH) + 1        // Calendar.MONTH 0-indexed
-        val year      = cal.get(Calendar.YEAR)
+        val parsedDate = parseApiDateOrToday(queryDate)
+        val month = parsedDate.monthValue
+        val year = parsedDate.year
 
         // ─── 1. Ay önbelleğini kontrol et ────────────────────────────────────
-        val cachedCount = dao.countForMonth(month, year, city)
+        val cachedCount = dao.countForMonth(
+            month = month,
+            year = year,
+            city = city,
+            country = country,
+            method = method,
+            school = school
+        )
         if (cachedCount >= 28) {
-            val todayCached = dao.getPrayerTimeByDate(queryDate, city)
+            val todayCached = dao.getPrayerTimeByDate(
+                date = queryDate,
+                city = city,
+                country = country,
+                method = method,
+                school = school
+            )
             if (todayCached != null) return Resource.Success(todayCached.toDomain())
             // Ay kayıtları var ama bugünkü tarih eşleşmedi (ay geçiş kenarı) → API'ye düş
         }
@@ -67,14 +81,22 @@ class PrayerTimeRepositoryImpl @Inject constructor(
         return result.fold(
             onSuccess = { calendarResponse ->
                 // Tüm günleri entity listesine dönüştür ve DB'ye toplu yaz
-                val entities = calendarResponse.data.map { it.toEntity(city, country) }
+                val entities = calendarResponse.data.map {
+                    it.toEntity(city, country, method, school)
+                }
                 dao.insertAll(entities)
 
                 // Geçmiş aylara ait eski kayıtları temizle (DB şişmesini önle)
                 dao.clearOldMonths(year, month)
 
                 // DB'den bugünü döndür (Single Source of Truth)
-                val today = dao.getPrayerTimeByDate(queryDate, city)
+                val today = dao.getPrayerTimeByDate(
+                    date = queryDate,
+                    city = city,
+                    country = country,
+                    method = method,
+                    school = school
+                )
                 if (today != null) {
                     Resource.Success(today.toDomain())
                 } else {
@@ -82,8 +104,25 @@ class PrayerTimeRepositoryImpl @Inject constructor(
                 }
             },
             onFailure = { e ->
+                FirebaseCrashlytics.getInstance().apply {
+                    setCustomKey("repository", "PrayerTimeRepositoryImpl")
+                    setCustomKey("city", city)
+                    setCustomKey("country", country)
+                    setCustomKey("method", method)
+                    setCustomKey("school", school)
+                    setCustomKey("query_date", queryDate)
+                    log("Prayer calendar fetch failed")
+                    recordException(e)
+                }
+
                 // ─── 3. Ağ hatası veya Zaman Aşımı → Stale fallback ─────────
-                val stale = dao.getPrayerTimeByDate(queryDate, city)
+                val stale = dao.getPrayerTimeByDate(
+                    date = queryDate,
+                    city = city,
+                    country = country,
+                    method = method,
+                    school = school
+                )
                 if (stale != null) {
                     Resource.Success(stale.toDomain())
                 } else {
@@ -101,5 +140,13 @@ class PrayerTimeRepositoryImpl @Inject constructor(
 
     override suspend fun deleteOldPrayerTimes(beforeDate: String) {
         dao.deleteOldPrayerTimes(beforeDate)
+    }
+
+    private fun parseApiDateOrToday(date: String): LocalDate {
+        return try {
+            LocalDate.parse(date, DateTimeFormatter.ofPattern("dd-MM-yyyy"))
+        } catch (_: DateTimeParseException) {
+            LocalDate.now()
+        }
     }
 }

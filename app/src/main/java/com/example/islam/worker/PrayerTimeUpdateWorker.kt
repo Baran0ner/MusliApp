@@ -19,6 +19,8 @@ import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZonedDateTime
+import java.time.Duration
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -38,7 +40,8 @@ class PrayerTimeUpdateWorker @AssistedInject constructor(
             val result = prayerTimeRepository.getPrayerTimes(
                 city    = prefs.city,
                 country = prefs.country,
-                method  = prefs.calculationMethod
+                method  = prefs.calculationMethod,
+                school  = prefs.school
             )
             when (result) {
                 is Resource.Success -> {
@@ -151,15 +154,31 @@ class PrayerTimeUpdateWorker @AssistedInject constructor(
                 repeatInterval         = 24,
                 repeatIntervalTimeUnit = TimeUnit.HOURS
             )
+                .setInitialDelay(calculateInitialDelayTo005(), TimeUnit.MILLISECONDS)
                 .setConstraints(constraints)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.MINUTES)
                 .build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.UPDATE,
                 request
             )
+        }
+
+        private fun calculateInitialDelayTo005(): Long {
+            val now = ZonedDateTime.now()
+            var nextRun = now
+                .withHour(0)
+                .withMinute(5)
+                .withSecond(0)
+                .withNano(0)
+
+            if (!nextRun.isAfter(now)) {
+                nextRun = nextRun.plusDays(1)
+            }
+
+            return Duration.between(now, nextRun).toMillis().coerceAtLeast(0L)
         }
     }
 }

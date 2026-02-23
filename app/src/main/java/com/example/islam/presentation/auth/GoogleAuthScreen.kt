@@ -21,9 +21,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.islam.R
 import com.example.islam.core.navigation.Screen
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
 import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -37,9 +39,15 @@ import kotlinx.coroutines.tasks.await
  *
  * Web client ID'yi Firebase Console → Authentication → Settings → Web SDK configuration'dan alın.
  */
-private const val WEB_CLIENT_ID =
-    "379378206614-gb2ktl83u7snchvuaqj11ski46neggi9.apps.googleusercontent.com"
-// ^ Firebase Console → Authentication → Sign-in providers → Google → Web client ID
+private fun googleSignInErrorMessage(e: ApiException): String {
+    return when (e.statusCode) {
+        GoogleSignInStatusCodes.SIGN_IN_CANCELLED -> "Giriş iptal edildi."
+        GoogleSignInStatusCodes.NETWORK_ERROR -> "Ağ hatası. İnternet bağlantısını kontrol edin."
+        GoogleSignInStatusCodes.DEVELOPER_ERROR -> "Google giriş yapılandırması hatalı (SHA-1 / paket adı)."
+        GoogleSignInStatusCodes.SIGN_IN_FAILED -> "Google ile giriş başarısız."
+        else -> "Google giriş hatası (kod: ${e.statusCode})."
+    }
+}
 
 @Composable
 fun GoogleAuthScreen(
@@ -58,10 +66,18 @@ fun GoogleAuthScreen(
         }
     }
 
+    val webClientId = remember { context.getString(R.string.default_web_client_id) }
+
     // Google Sign-In launcher
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) {
+            if (result.resultCode != Activity.RESULT_CANCELED) {
+                viewModel.setError("Google ile giriş başarısız.")
+            }
+            return@rememberLauncherForActivityResult
+        }
         if (result.resultCode == Activity.RESULT_OK) {
             val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
             try {
@@ -69,16 +85,18 @@ fun GoogleAuthScreen(
                 val idToken = account.idToken
                 if (idToken != null) {
                     viewModel.signInWithGoogle(idToken)
+                } else {
+                    viewModel.setError("ID token alınamadı. Google yapılandırmasını kontrol edin.")
                 }
-            } catch (_: ApiException) {
-                // Kullanıcı iptal etti veya hata oluştu
+            } catch (e: ApiException) {
+                viewModel.setError(googleSignInErrorMessage(e))
             }
         }
     }
 
     val gso = remember {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(WEB_CLIENT_ID)
+            .requestIdToken(webClientId)
             .requestEmail()
             .build()
     }

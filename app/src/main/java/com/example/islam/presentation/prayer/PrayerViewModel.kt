@@ -12,17 +12,19 @@ import com.example.islam.domain.model.WeekDay
 import com.example.islam.domain.model.timeFor
 import com.example.islam.data.repository.FirebaseRepository
 import com.example.islam.domain.repository.PrayerHistoryRepository
+import com.example.islam.domain.repository.TimeTickerRepository
 import com.example.islam.domain.usecase.prayer.GetPrayerTimesUseCase
 import com.example.islam.domain.usecase.prayer.GetNextPrayerUseCase
 import com.example.islam.domain.usecase.prayer.NextPrayer
 import com.example.islam.core.util.DateUtil.cleanTime
 import com.example.islam.core.util.DateUtil.formatCountdown
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -38,8 +40,15 @@ data class PrayerUiState(
     val countdownText    : String           = "00:00:00",
     val error            : String?          = null,
     val userPreferences  : UserPreferences  = UserPreferences(),
+    val prayerStreak     : Int              = 0,
+    val completedToday   : Int              = 0,
     val selectedDay      : WeekDay?         = null,
     val showDaySheet     : Boolean          = false
+)
+
+data class StreakCelebrationEvent(
+    val streak: Int,
+    val goal: Int
 )
 
 @HiltViewModel
@@ -48,24 +57,34 @@ class PrayerViewModel @Inject constructor(
     private val getNextPrayerUseCase   : GetNextPrayerUseCase,
     private val prefsDataStore         : UserPreferencesDataStore,
     private val prayerHistoryRepository: PrayerHistoryRepository,
-    private val firebaseRepository     : FirebaseRepository
+    private val firebaseRepository     : FirebaseRepository,
+    private val timeTickerRepository   : TimeTickerRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PrayerUiState())
     val uiState: StateFlow<PrayerUiState> = _uiState.asStateFlow()
-
-    private val trackablePrayers = listOf(
-        Prayer.FAJR, Prayer.DHUHR, Prayer.ASR, Prayer.MAGHRIB, Prayer.ISHA
-    ).map { it.name }
+    private val _celebrationEvents = MutableSharedFlow<StreakCelebrationEvent>(extraBufferCapacity = 1)
+    val celebrationEvents = _celebrationEvents.asSharedFlow()
 
     val completedPrayersFlow: Flow<Set<String>> = prefsDataStore.completedPrayersToday
     val weeklyHistoryFlow: Flow<List<WeekDay>> = prayerHistoryRepository.getLast7Days()
 
     init {
+        viewModelScope.launch { prefsDataStore.ensureStreakUpToDate() }
         viewModelScope.launch {
             prefsDataStore.userPreferences.collect { prefs ->
                 _uiState.update { it.copy(userPreferences = prefs) }
                 loadTodaysPrayers(prefs)
+            }
+        }
+        viewModelScope.launch {
+            prefsDataStore.prayerStreak.collect { streak ->
+                _uiState.update { it.copy(prayerStreak = streak) }
+            }
+        }
+        viewModelScope.launch {
+            prefsDataStore.completedPrayersToday.collect { completed ->
+                _uiState.update { it.copy(completedToday = completed.size) }
             }
         }
         viewModelScope.launch {
@@ -82,27 +101,17 @@ class PrayerViewModel @Inject constructor(
 
     private fun startCountdownTicker() {
         viewModelScope.launch {
-            while (true) {
-                delay(1_000L)
-                val next = _uiState.value.nextPrayer ?: continue
-                val remaining = next.millisUntil - 1_000L
-                if (remaining > 0) {
+            timeTickerRepository.secondTicker().collect {
+                val pt = _uiState.value.prayerTime
+                if (pt != null) {
+                    // Her tikte sistem saatinden hesapla: sayaç telefon saatiyle senkron kalır.
+                    val refreshedNext = getNextPrayerUseCase(pt)
                     _uiState.update {
                         it.copy(
-                            nextPrayer = next.copy(millisUntil = remaining),
-                            countdownText = formatCountdown(remaining)
+                            nextPrayer = refreshedNext,
+                            countdownText = formatCountdown(refreshedNext.millisUntil),
+                            currentPrayer = determineCurrentPrayer(pt)
                         )
-                    }
-                } else {
-                    _uiState.value.prayerTime?.let { pt ->
-                        val newNext = getNextPrayerUseCase(pt)
-                        _uiState.update {
-                            it.copy(
-                                nextPrayer = newNext,
-                                countdownText = formatCountdown(newNext.millisUntil),
-                                currentPrayer = determineCurrentPrayer(pt)
-                            )
-                        }
                     }
                 }
             }
@@ -112,7 +121,8 @@ class PrayerViewModel @Inject constructor(
     // ── Bugünkü namaz checkbox (DataStore tabanlı) ────────────────────────────
     fun togglePrayerCompleted(prayer: Prayer) {
         viewModelScope.launch {
-            prefsDataStore.togglePrayerCompleted(prayer.name, trackablePrayers)
+            val beforeStreak = prefsDataStore.prayerStreak.first()
+            prefsDataStore.togglePrayerCompleted(prayer.name)
 
             // Sync with Room DB
             val todayDate = java.time.LocalDate.now().toString()
@@ -133,6 +143,17 @@ class PrayerViewModel @Inject constructor(
                 val streak = prefsDataStore.prayerStreak.first()
                 firebaseRepository.syncStreak(streak)
             }
+
+            val afterStreak = prefsDataStore.prayerStreak.first()
+            if (afterStreak > beforeStreak) {
+                val goal = _uiState.value.userPreferences.dailyPrayerGoal.coerceIn(1, 5)
+                _celebrationEvents.tryEmit(
+                    StreakCelebrationEvent(
+                        streak = afterStreak,
+                        goal = goal
+                    )
+                )
+            }
         }
     }
 
@@ -151,7 +172,7 @@ class PrayerViewModel @Inject constructor(
                     PrayerType.MAGHRIB -> Prayer.MAGHRIB.name
                     PrayerType.ISHA -> Prayer.ISHA.name
                 }
-                prefsDataStore.togglePrayerCompleted(prayerName, trackablePrayers)
+                prefsDataStore.togglePrayerCompleted(prayerName)
             }
         }
     }
@@ -168,7 +189,12 @@ class PrayerViewModel @Inject constructor(
     // ── Namaz vakitleri yükleme ───────────────────────────────────────────────
     private suspend fun loadTodaysPrayers(prefs: UserPreferences) {
         _uiState.update { it.copy(isLoading = true, error = null) }
-        when (val result = getPrayerTimesUseCase(prefs.city, prefs.country, prefs.calculationMethod)) {
+        when (val result = getPrayerTimesUseCase(
+            city = prefs.city,
+            country = prefs.country,
+            method = prefs.calculationMethod,
+            school = prefs.school
+        )) {
             is Resource.Success -> {
                 val pt = result.data
                 val next = getNextPrayerUseCase(pt)
